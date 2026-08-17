@@ -1,0 +1,304 @@
+#!/usr/bin/env bash
+# 🦇 GHOST USER MANAGER - Administrador de usuarios VPN
+# Gestiona usuarios de SSH, OpenVPN, V2Ray y Psiphon (proxy WS puerto 80)
+# Uso: ghost-manager
+# ────────────────────────────────────────────────────────────
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+
+DB="/etc/ctmanager/config/ssh_users.db"
+VDB="/etc/ctmanager/config/v2ray_users.db"
+CFG_DIR="/etc/ctmanager/config"
+XRAY_BIN="/usr/local/bin/xray"
+XRAY_CFG="/usr/local/etc/xray/config.json"
+UUID_SH="/usr/local/bin/xray_uuid.sh"
+API_KEY_FILE="/etc/ghost-license/epro-api.key"
+
+# ─── Banner ───
+banner() {
+    clear
+    echo -e "${CYAN}"
+    echo "  ██████╗ ██╗  ██╗ ██████╗ ███████╗████████╗"
+    echo " ██╔════╝ ██║  ██║██╔════╝ ██╔════╝╚══██╔══╝"
+    echo " ██║  ███╗███████║██║  ███╗███████╗   ██║   "
+    echo " ██║   ██║██╔══██║██║   ██║╚════██║   ██║   "
+    echo " ╚██████╔╝██║  ██║╚██████╔╝███████║   ██║   "
+    echo "  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝   "
+    echo -e "${NC}"
+    echo -e "${BOLD}${BLUE}  🦇 Ghost VPN - Administrador de Usuarios${NC}"
+    echo -e "${CYAN}  ──────────────────────────────────────────${NC}"
+    echo ""
+}
+
+# ─── Detectar IP pública ───
+get_ip() {
+    curl -s --max-time 5 ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}'
+}
+
+# ─── Estado del sistema ───
+estado() {
+    banner
+    echo -e "${BOLD}${YELLOW}  📊 ESTADO DEL SISTEMA${NC}"
+    echo -e "${CYAN}  ─────────────────────────${NC}"
+    echo -e "  🌐 IP pública:     ${GREEN}$(get_ip)${NC}"
+    echo -e "  🟢 Puerto 80:      $(systemctl is-active pymanager 2>/dev/null | sed 's/active/✅ Proxy WS activo/;s/inactive/❌ caído/;s/failed/❌ error/')"
+    echo -e "  🛡️  OpenVPN 1194:  $(systemctl is-active openvpn@server 2>/dev/null | sed 's/active/✅ activo/;s/inactive/❌ caído/;s/failed/❌ error/')"
+    echo -e "  🚀 Xray 8443:      $(systemctl is-active xray 2>/dev/null | sed 's/active/✅ activo/;s/inactive/❌ caído/;s/failed/❌ error/')"
+    echo -e "  🌐 Psiphon 2223:   $(systemctl is-active psiphon 2>/dev/null | sed 's/active/✅ activo/;s/inactive/❌ caído/;s/failed/❌ error/')"
+    SSH_COUNT=$(sqlite3 "$DB" "SELECT COUNT(*) FROM users;" 2>/dev/null || echo 0)
+    V2_COUNT=$(sqlite3 "$VDB" "SELECT COUNT(*) FROM users;" 2>/dev/null || echo 0)
+    echo -e "  👥 Usuarios SSH:   ${GREEN}$SSH_COUNT${NC}   🚀 V2Ray: ${GREEN}$V2_COUNT${NC}"
+    echo ""
+}
+
+# ─── Crear usuario SSH/OpenVPN ───
+crear_ssh() {
+    local user pass horas expDate
+    read -p "  👤 Nombre de usuario: " user
+    [ -z "$user" ] && { echo -e "${RED}  ❌ Nombre vacío${NC}"; sleep 2; return; }
+    read -p "  ⏳ Duración (horas, ej 720 = 30d): " horas
+    horas=${horas:-720}
+    pass=$(openssl rand -hex 4)
+    expDate=$(date -d "+${horas} hours" "+%Y-%m-%d %H:%M:%S")
+
+    # Usuario de sistema
+    if id "$user" >/dev/null 2>&1; then
+        echo -e "${RED}  ❌ El usuario $user ya existe${NC}"; sleep 2; return
+    fi
+    useradd -m -s /bin/false "$user" 2>/dev/null
+    echo "$user:$pass" | chpasswd
+    chage -E "$(date -d "+${horas} hours" +%Y-%m-%d)" "$user" 2>/dev/null || true
+    # maxlogins 1 (1 sola persona)
+    mkdir -p /etc/ssh/sshd_config.d
+    echo "MaxSessions 1" > "/etc/ssh/sshd_config.d/$user.conf"
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
+
+    # DB
+    mkdir -p "$CFG_DIR"
+    sqlite3 "$DB" "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')), expires_at TEXT, activo INTEGER DEFAULT 1);" 2>/dev/null
+    sqlite3 "$DB" "INSERT OR REPLACE INTO users (username, password, expires_at) VALUES ('$user','$pass','$expDate');" 2>/dev/null
+
+    echo ""
+    echo -e "${GREEN}  ✅ USUARIO CREADO (SSH/OpenVPN)${NC}"
+    echo -e "${CYAN}  ──────────────────────────────${NC}"
+    echo -e "  👤 Usuario:  ${BOLD}$user${NC}"
+    echo -e "  🔑 Password: ${BOLD}$pass${NC}"
+    echo -e "  ⏳ Expira:   $expDate"
+    echo -e "  🔌 Host:     $(get_ip):22"
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+# ─── Crear usuario V2Ray ───
+crear_v2ray() {
+    local user uuid horas expDate
+    read -p "  👤 Nombre (identificador): " user
+    [ -z "$user" ] && { echo -e "${RED}  ❌ Nombre vacío${NC}"; sleep 2; return; }
+    read -p "  ⏳ Duración (horas, ej 720 = 30d): " horas
+    horas=${horas:-720}
+    uuid=$("$XRAY_BIN" uuid 2>/dev/null)
+    expDate=$(date -d "+${horas} hours" "+%Y-%m-%d %H:%M:%S")
+
+    # Agregar UUID a Xray
+    if [ -x "$UUID_SH" ]; then
+        "$UUID_SH" add "$uuid" && "$UUID_SH" reload
+    else
+        echo -e "${YELLOW}  ⚠️  xray_uuid.sh no existe — UUID agregado solo en DB${NC}"
+    fi
+
+    mkdir -p "$CFG_DIR"
+    sqlite3 "$VDB" "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, uuid TEXT, expires_at TEXT, activo INTEGER DEFAULT 1);" 2>/dev/null
+    sqlite3 "$VDB" "INSERT OR REPLACE INTO users (username, uuid, expires_at) VALUES ('$user','$uuid','$expDate');" 2>/dev/null
+
+    echo ""
+    echo -e "${GREEN}  ✅ USUARIO V2RAY CREADO${NC}"
+    echo -e "${CYAN}  ──────────────────────────${NC}"
+    echo -e "  👤 Nombre:  ${BOLD}$user${NC}"
+    echo -e "  🚀 UUID:    ${BOLD}$uuid${NC}"
+    echo -e "  ⏳ Expira:  $expDate"
+    echo -e "  🔗 Link:    vless://$uuid@$(get_ip):80?type=tcp&security=none&encryption=none#Ghost-$user"
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+
+# ─── Crear usuario UDP Custom (Claro/Personal) ───
+crear_udpcustom() {
+    local user pass horas expDate operadora
+    read -p "  👤 Nombre de usuario: " user
+    [ -z "$user" ] && { echo -e "${RED}  ❌ Nombre vacío${NC}"; sleep 2; return; }
+    read -p "  🌐 Operadora (claro/personal): " operadora
+    operadora=${operadora:-claro}
+    read -p "  ⏳ Duración (horas, ej 720 = 30d): " horas
+    horas=${horas:-720}
+    pass=$(openssl rand -hex 4)
+    expDate=$(date -d "+${horas} hours" "+%Y-%m-%d %H:%M:%S")
+
+    # Usuario de sistema (udp-custom valida contra /etc/shadow)
+    if id "$user" >/dev/null 2>&1; then
+        echo -e "${RED}  ❌ El usuario $user ya existe${NC}"; sleep 2; return
+    fi
+    useradd -m -s /bin/false "$user" 2>/dev/null
+    echo "$user:$pass" | chpasswd
+    chage -E "$(date -d "+${horas} hours" +%Y-%m-%d)" "$user" 2>/dev/null || true
+
+    echo ""
+    echo -e "${GREEN}  ✅ USUARIO UDP CUSTOM CREADO${NC}"
+    echo -e "${CYAN}  ──────────────────────────────${NC}"
+    echo -e "  👤 Usuario:  ${BOLD}$user${NC}"
+    echo -e "  🔑 Password: ${BOLD}$pass${NC}"
+    echo -e "  ⏳ Expira:   $expDate"
+    echo -e "  🌐 Operadora: $operadora"
+    echo -e "  🛰️  Host:     157.250.202.243 · Puertos 1-65535"
+    echo -e "  📱 App:      UDP Custom en HTTP Custom (solo SIM $operadora)"
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+# ─── Estado WireGuard ───
+estado_wg() {
+    banner
+    echo -e "${BOLD}${YELLOW}  🔐 ESTADO WIREGUARD${NC}"
+    echo -e "${CYAN}  ─────────────────────${NC}"
+    if systemctl is-active wg-quick@wg0 >/dev/null 2>&1; then
+        echo -e "  🟢 wg0:          ${GREEN}✅ activo${NC}"
+    else
+        echo -e "  🔴 wg0:          ${RED}❌ caído${NC}"
+    fi
+    if command -v wg >/dev/null 2>&1; then
+        wg show 2>/dev/null | grep -E "interface|public key|listening port" | sed 's/^/  /'
+        echo -e "  ${CYAN}  ─────────────────────${NC}"
+        wg show 2>/dev/null | grep -A2 "peer" | head -6 | sed 's/^/  /' || echo "  (sin peers)"
+    fi
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+# ─── Panel web ───
+panel_web() {
+    banner
+    echo -e "${BOLD}${YELLOW}  🌐 PANEL WEB${NC}"
+    echo -e "${CYAN}  ─────────────────────${NC}"
+    if systemctl is-active ghost-panel >/dev/null 2>&1; then
+        echo -e "  🟢 ghost-panel: ${GREEN}✅ activo (puerto 8303)${NC}"
+        echo -e "  🔗 http://$(get_ip):8303"
+    else
+        echo -e "  🔴 ghost-panel: ${RED}❌ caído${NC}"
+    fi
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+# ─── Crear usuario Psiphon ───
+crear_psiphon() {
+    banner
+    echo -e "${BOLD}${YELLOW}  🌐 PSIPHON${NC}"
+    echo -e "${CYAN}  ──────────────${NC}"
+    echo -e "  ⚠️  El server Psiphon usa UNA credencial única para todos."
+    echo -e "  Para expirar usuarios: regenerá la credencial (kill-switch)."
+    echo ""
+    if [ -f /etc/psiphon/server-entry.dat ]; then
+        echo -e "  ${GREEN}✅ Server Psiphon instalado${NC}"
+        echo -e "  📄 Server entry: /etc/psiphon/server-entry.dat"
+        SIZE=$(stat -c%s /etc/psiphon/server-entry.dat 2>/dev/null)
+        echo -e "  📏 Tamaño: $SIZE bytes"
+        if [ -f /etc/psiphon/psiphond.config ]; then
+            USER_PSI=$(grep -o '"SSHUserName":"[^"]*"' /etc/psiphon/psiphond.config 2>/dev/null | head -1 | cut -d'"' -f4)
+            echo -e "  👤 Credencial: $USER_PSI"
+        fi
+    else
+        echo -e "  ${RED}❌ Server Psiphon no instalado${NC}"
+        echo -e "  Instalalo con: ghost-install-stack"
+    fi
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+# ─── Listar usuarios ───
+listar() {
+    banner
+    echo -e "${BOLD}${YELLOW}  👥 USUARIOS SSH / OPENVPN${NC}"
+    echo -e "${CYAN}  ──────────────────────────${NC}"
+    sqlite3 -header -column "$DB" "SELECT username, expires_at, CASE WHEN activo=1 THEN '✅' ELSE '❌' END as activo FROM users ORDER BY expires_at DESC;" 2>/dev/null || echo "  (sin usuarios)"
+    echo ""
+    echo -e "${BOLD}${YELLOW}  🚀 USUARIOS V2RAY${NC}"
+    echo -e "${CYAN}  ────────────────${NC}"
+    sqlite3 -header -column "$VDB" "SELECT username, substr(uuid,1,8)||'...' as uuid, expires_at FROM users ORDER BY expires_at DESC;" 2>/dev/null || echo "  (sin usuarios)"
+    echo ""
+    echo -e "${BOLD}${YELLOW}  📄 CONFIGS EN DISCO (/opt/ghost-configs)${NC}"
+    ls /opt/ghost-configs/*.hc 2>/dev/null | wc -l | xargs echo "  🗂️  "
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+# ─── Eliminar usuario ───
+eliminar() {
+    local user
+    banner
+    echo -e "${BOLD}${RED}  🗑️  ELIMINAR USUARIO${NC}"
+    echo -e "${CYAN}  ────────────────${NC}"
+    read -p "  👤 Nombre del usuario a eliminar: " user
+    [ -z "$user" ] && return
+
+    # Sistema
+    pkill -u "$user" 2>/dev/null || true
+    userdel -f "$user" 2>/dev/null && echo -e "  ${GREEN}✅ Usuario de sistema eliminado${NC}" || echo -e "  ${YELLOW}⚠️  No era usuario de sistema${NC}"
+    rm -f "/etc/ssh/sshd_config.d/$user.conf"
+
+    # DBs
+    sqlite3 "$DB" "DELETE FROM users WHERE username='$user';" 2>/dev/null && echo -e "  ${GREEN}✅ Quitado de ssh_users.db${NC}"
+    VUUID=$(sqlite3 "$VDB" "SELECT uuid FROM users WHERE username='$user';" 2>/dev/null)
+    if [ -n "$VUUID" ] && [ -x "$UUID_SH" ]; then
+        "$UUID_SH" remove "$VUUID" 2>/dev/null && "$UUID_SH" reload 2>/dev/null
+        echo -e "  ${GREEN}✅ UUID quitado de Xray${NC}"
+    fi
+    sqlite3 "$VDB" "DELETE FROM users WHERE username='$user';" 2>/dev/null
+
+    # Configs
+    rm -f /opt/ghost-configs/*"$user"*.hc 2>/dev/null
+    echo -e "  ${GREEN}✅ Configs del usuario borrados${NC}"
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+# ─── Menú principal ───
+menu() {
+    while true; do
+        banner
+        echo -e "${BOLD}${YELLOW}  📋 MENÚ PRINCIPAL${NC}"
+        echo -e "${CYAN}  ───────────────${NC}"
+        echo -e "  ${BOLD}${GREEN}1${NC}) 📊 Estado del sistema"
+        echo -e "  ${BOLD}${GREEN}2${NC}) 👤 Crear usuario SSH/OpenVPN"
+        echo -e "  ${BOLD}${GREEN}3${NC}) 🚀 Crear usuario V2Ray"
+        echo -e "  ${BOLD}${GREEN}4${NC}) 🌐 Ver estado Psiphon"
+        echo -e "  ${BOLD}${GREEN}5${NC}) 👥 Listar usuarios"
+        echo -e "  ${BOLD}${RED}6${NC}) 🗑️  Eliminar usuario"
+        echo -e "  ${BOLD}${GREEN}7${NC}) 🛰️  Crear usuario UDP Custom"
+        echo -e "  ${BOLD}${GREEN}8${NC}) 🔐 Estado WireGuard"
+        echo -e "  ${BOLD}${GREEN}9${NC}) 🌐 Panel web (:8303)"
+        echo -e "  ${BOLD}${RED}0${NC}) Salir"
+        echo ""
+        read -p "  ➤ Opción: " op
+        case "$op" in
+            1) estado; read -p "  ⏎ Enter para continuar...";;
+            2) crear_ssh;;
+            3) crear_v2ray;;
+            4) crear_psiphon;;
+            5) listar;;
+            6) eliminar;;
+            7) crear_udpcustom;;
+            8) estado_wg;;
+            9) panel_web;;
+            0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
+            *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
+        esac
+    done
+}
+
+# ─── Inicio ───
+if [ "$EUID" -ne 0 ] && [ "$USER" != "root" ]; then
+    echo "❌ Ejecutar como root"
+    exit 1
+fi
+menu
