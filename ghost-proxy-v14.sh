@@ -857,9 +857,17 @@ duplicate-cn
 EOF
   ok "server.conf creado"
 
-  # 5) Servicio + IP forwarding
+  # 5) Servicio + IP forwarding + NAT (MASQUERADE para que los clientes naveguen)
   sed -i 's/^#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf 2>/dev/null
   echo 1 > /proc/sys/net/ipv4/ip_forward
+  # NAT: los clientes OpenVPN (10.8.0.0/24) salen a internet con masquerade
+  local IFACE_NAT
+  IFACE_NAT="$(ip route 2>/dev/null | grep '^default' | awk '{print $5}' | head -1)"
+  [[ -z "$IFACE_NAT" ]] && IFACE_NAT="eth0"
+  iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -o "$IFACE_NAT" -j MASQUERADE 2>/dev/null || \
+    iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o "$IFACE_NAT" -j MASQUERADE 2>/dev/null || true
+  # ufw: permitir forwarding
+  sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw 2>/dev/null || true
   systemctl daemon-reload
   systemctl enable openvpn@server >/dev/null 2>&1 || true
   systemctl restart openvpn@server 2>/dev/null || true
