@@ -242,12 +242,26 @@ crear_psiphon() {
         SIZE=$(stat -c%s /etc/psiphon/server-entry.dat 2>/dev/null)
         echo -e "  📏 Tamaño: $SIZE bytes"
         if [ -f /etc/psiphon/psiphond.config ]; then
-            USER_PSI=$(grep -o '"SSHUserName":"[^"]*"' /etc/psiphon/psiphond.config 2>/dev/null | head -1 | cut -d'"' -f4)
-            echo -e "  👤 Credencial: $USER_PSI"
+            USER_PSI=$(grep -oE '"SSHUserName"\s*:\s*"[^"]*"' /etc/psiphon/psiphond.config 2>/dev/null | head -1 | cut -d'"' -f4)
+            echo -e "  👤 Credencial: ${BOLD}$USER_PSI${NC}"
+        fi
+        echo ""
+        echo -e "  ${BOLD}${GREEN}1${NC}) 📋 Ver el HEX (para importar en HTTP Custom)"
+        echo -e "  ${BOLD}${RED}0${NC}) Volver"
+        echo ""
+        read -p "  ➤ Opción: " psi_op
+        if [ "$psi_op" = "1" ]; then
+            echo ""
+            echo -e "${BOLD}${YELLOW}  📋 SERVER ENTRY HEX (copiá todo esto):${NC}"
+            echo -e "${CYAN}  ──────────────────────────────────────────${NC}"
+            cat /etc/psiphon/server-entry.dat
+            echo ""
+            echo -e "${CYAN}  ──────────────────────────────────────────${NC}"
+            echo -e "  ${YELLOW}💡 Pegá este HEX en: HTTP Custom → Psiphon → Server Entry${NC}"
         fi
     else
         echo -e "  ${RED}❌ Server Psiphon no instalado${NC}"
-        echo -e "  Instalalo con: ghost-install-stack"
+        echo -e "  ${YELLOW}💡 Corré el instalador con: bash <(curl -s URL) auto${NC}"
     fi
     echo ""
     read -p "  ⏎ Enter para continuar..."
