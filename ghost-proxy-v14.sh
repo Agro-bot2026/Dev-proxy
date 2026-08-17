@@ -28,6 +28,7 @@ BANNER_COLOR='\033[1;36m'
 GREEN='\033[1;32m'
 BOLD='\033[1m'
 CYAN='\033[1;36m'
+BLUE='\033[1;34m'
 YELLOW='\033[1;33m'
 RED='\033[1;31m'
 NC='\033[0m'
@@ -1019,6 +1020,158 @@ EOF
   fi
 }
 
+# ─── Mini-Neofetch: logo según la distro + info del sistema ───
+detect_distro(){
+  if [[ -f /etc/os-release ]]; then
+    local id
+    id="$(grep -E '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')"
+    case "$id" in
+      ubuntu) echo "ubuntu";;
+      debian) echo "debian";;
+      rocky|centos|almalinux|rhel|fedora) echo "redhat";;
+      arch|manjaro|endeavouros) echo "arch";;
+      alpine) echo "alpine";;
+      opensuse*|sles) echo "suse";;
+      *) echo "generic";;
+    esac
+  else
+    echo "generic"
+  fi
+}
+
+logo_ubuntu(){
+  echo -e "${BOLD}${RED}"
+  echo "        .-/+oossssoo+/-."
+  echo "     \`:+ssssssssssssssss+:·"
+  echo "    -+ssssssssssssssssssyys+-"
+  echo "  .ossssssssssssssssssdMMMNysso."
+  echo " /ssssssssssshdmmNNmmyNMMMMhssss/"
+  echo "+sssssssshmdMMMMMMMNddddysssssss+"
+  echo ".ssssssssNMMMMMMMhssssssssssssss."
+  echo "+ssssssssydsssssssssssssssssssss+"
+  echo -e "${NC}"
+}
+
+logo_debian(){
+  echo -e "${BOLD}${RED}"
+  echo "    _,met\$\$\$\$\$gg."
+  echo "  ,g\$\$\$\$\$\$\$\$\$\$\$\$\$\$\$P."
+  echo " ,g\$\$P\"\"       \"\"\"Y\$\$."
+  echo " \$\$P'            \`\$\$\$."
+  echo " \$\$P      ,gg.     \`\$\$b"
+  echo " \$\$       i\$\$\$\$\i    \`\$\$\$"
+  echo " \`\$\$       \`\$\$\$'    \$\$\$'"
+  echo "  \`\$\$\$.     \`\$'   .\$\$'"
+  echo "    \"\$\$\$ggg,___ggg\$\$\$\""
+  echo -e "${NC}"
+}
+
+logo_redhat(){
+  echo -e "${BOLD}${BLUE}"
+  echo "        (o)(o)"
+  echo "       /  __  \\"
+  echo "      /  (  )  \\"
+  echo "     /    \/    \\"
+  echo "    /            \\"
+  echo "   /              \\"
+  echo "  /________________\\"
+  echo "   |  RHEL-FAMILY |"
+  echo -e "${NC}"
+}
+
+logo_arch(){
+  echo -e "${BOLD}${CYAN}"
+  echo "      /\        /\ "
+  echo "     /  \      /  \ "
+  echo "    / /\ \    / /\ \ "
+  echo "   / /  \ \  / /  \ \ "
+  echo "  / /    \ \/ /    \ \ "
+  echo " / /      \/ /      \ \ "
+  echo "/_/        \/_/       \_\ "
+  echo -e "${NC}"
+}
+
+logo_alpine(){
+  echo -e "${BOLD}${BLUE}"
+  echo "      /\  /\  /\ "
+  echo "     /  \/  \/  \ "
+  echo "    /  /\  /\  /\ "
+  echo "   /  /  \/  \/  \ "
+  echo "  /  /  /\  /\  /\ "
+  echo " /__/__/__/__/__/__\ "
+  echo -e "${NC}"
+}
+
+logo_suse(){
+  echo -e "${BOLD}${GREEN}"
+  echo "   --------"
+  echo "  /  _____ \ "
+  echo " |  /     \ |"
+  echo " | |  o o  | |"
+  echo " |  \_____/  |"
+  echo "  \_________/ "
+  echo -e "${NC}"
+}
+
+logo_generic(){
+  echo -e "${BOLD}${GREEN}"
+  echo "     _____"
+  echo "    /     \\"
+  echo "   |  🦇  |"
+  echo "    \_____/"
+  echo -e "${NC}"
+}
+
+show_sysinfo(){
+  local distro logo OS_NAME HOST KERNEL UPTIME PKGS SHELL CPU MEM IP
+  distro="$(detect_distro)"
+  case "$distro" in
+    ubuntu) logo=logo_ubuntu;;
+    debian) logo=logo_debian;;
+    redhat) logo=logo_redhat;;
+    arch)   logo=logo_arch;;
+    alpine) logo=logo_alpine;;
+    suse)   logo=logo_suse;;
+    *)      logo=logo_generic;;
+  esac
+  OS_NAME="$(grep -E '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')"
+  OS_NAME="${OS_NAME:-Desconocido}"
+  HOST="$(hostname 2>/dev/null || echo '?')"
+  KERNEL="$(uname -r 2>/dev/null || echo '?')"
+  UPTIME="$(uptime -p 2>/dev/null | sed 's/up //' || echo '?')"
+  if has_cmd dpkg; then PKGS="$(dpkg -l 2>/dev/null | wc -l) (dpkg)";
+  elif has_cmd rpm; then PKGS="$(rpm -qa 2>/dev/null | wc -l) (rpm)";
+  elif has_cmd pacman; then PKGS="$(pacman -Q 2>/dev/null | wc -l) (pacman)";
+  elif has_cmd apk; then PKGS="$(apk info 2>/dev/null | wc -l) (apk)";
+  else PKGS="?"; fi
+  SHELL="$(basename "${SHELL:-/bin/bash}" 2>/dev/null || echo '?')"
+  CPU="$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed 's/^ //' || echo '?')"
+  MEM="$(free -h 2>/dev/null | awk '/Mem:/{print $2" / "$2}' || echo '?')"
+  # IP pública (solo IPv4 para que sea legible)
+  IP="$(curl -4 -s --max-time 4 ifconfig.me 2>/dev/null || curl -s --max-time 4 api.ipify.org 2>/dev/null || echo '?')"
+
+  echo ""
+  echo -e "${BOLD}${CYAN}  ══════════════════════════════════════════════${NC}"
+  echo ""
+  # Logo + info en 2 columnas aproximadas
+  local logo_out
+  logo_out="$($logo)"
+  echo -e "$logo_out"
+  echo ""
+  echo -e "  ${BOLD}OS:${NC}      ${OS_NAME}"
+  echo -e "  ${BOLD}Host:${NC}    ${HOST}"
+  echo -e "  ${BOLD}Kernel:${NC}  ${KERNEL}"
+  echo -e "  ${BOLD}Uptime:${NC}  ${UPTIME}"
+  echo -e "  ${BOLD}Paquetes:${NC} ${PKGS}"
+  echo -e "  ${BOLD}Shell:${NC}   ${SHELL}"
+  echo -e "  ${BOLD}CPU:${NC}     ${CPU}"
+  echo -e "  ${BOLD}Memoria:${NC} ${MEM}"
+  echo -e "  ${BOLD}IP:${NC}      ${IP}"
+  echo ""
+  echo -e "${BOLD}${CYAN}  ══════════════════════════════════════════════${NC}"
+  echo ""
+}
+
 # ─── Instalación AUTOMÁTICA (todo sin preguntar) ───
 auto_install(){
   need_root
@@ -1038,6 +1191,8 @@ auto_install(){
   echo -e "  ${GREEN}✅${NC} También: Fedora · Arch · Alpine · openSUSE"
   echo -e "${CYAN}  ──────────────────────────────────────────────────${NC}"
   echo ""
+  # Info del sistema con logo de la distro (mini-neofetch)
+  show_sysinfo
   # 0) dependencias primero
   ensure_deps_auto
   # 1) proxy.py
