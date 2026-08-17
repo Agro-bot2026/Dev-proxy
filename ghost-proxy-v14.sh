@@ -26,8 +26,10 @@ BADVPN_FALLBACK="https://configs.charly-tricks.dev/configs/badvpn-udpgw"
 
 BANNER_COLOR='\033[1;36m'
 GREEN='\033[1;32m'
-RED='\033[1;31m'
+BOLD='\033[1m'
+CYAN='\033[1;36m'
 YELLOW='\033[1;33m'
+RED='\033[1;31m'
 NC='\033[0m'
 
 ts(){ date +"%Y%m%d%H%M%S"; }
@@ -1020,14 +1022,22 @@ EOF
 # ─── Instalación AUTOMÁTICA (todo sin preguntar) ───
 auto_install(){
   need_root
-  echo -e "${GREEN}⚡ AUTOINSTALL: Ghost Proxy v14${NC}"
-  echo -e "${CYAN}──────────────────────────────────────────${NC}"
-  echo -e "  📦 Compatible con:"
-  echo -e "  ✅ Ubuntu 22-26 (apt)"
-  echo -e "  ✅ Debian 12-13+ (apt)"
-  echo -e "  ✅ Rocky / Alma / CentOS Stream 9 (dnf + EPEL automático)"
-  echo -e "  ✅ También: Fedora, Arch, Alpine, openSUSE"
-  echo -e "${CYAN}──────────────────────────────────────────${NC}"
+  echo -e "${BOLD}${GREEN}"
+  echo "╔══════════════════════════════════════════════════════╗"
+  echo "║   🦇  GHOST PROXY v14 — AUTOINSTALL                  ║"
+  echo "║                                                      ║"
+  echo "║   Multi-Protocolo · SSH · Psiphon · V2Ray            ║"
+  echo "║   OpenVPN · WireGuard · UDP Custom · BadVPN          ║"
+  echo "╚══════════════════════════════════════════════════════╝"
+  echo -e "${NC}"
+  echo -e "${CYAN}  📦 SISTEMAS COMPATIBLES${NC}"
+  echo -e "  ──────────────────────────────────────────────────"
+  echo -e "  ${GREEN}✅${NC} Ubuntu ${BOLD}22${NC} → ${BOLD}26${NC}          (apt)"
+  echo -e "  ${GREEN}✅${NC} Debian ${BOLD}12${NC} → ${BOLD}13+${NC}         (apt)"
+  echo -e "  ${GREEN}✅${NC} Rocky / Alma / CentOS ${BOLD}9${NC}  (dnf + EPEL auto)"
+  echo -e "  ${GREEN}✅${NC} También: Fedora · Arch · Alpine · openSUSE"
+  echo -e "${CYAN}  ──────────────────────────────────────────────────${NC}"
+  echo ""
   # 0) dependencias primero
   ensure_deps_auto
   # 1) proxy.py
