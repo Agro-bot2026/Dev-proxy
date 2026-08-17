@@ -244,6 +244,10 @@ EOF
 
 # ─── Servicio systemd ───
 write_service(){
+  if ! command -v systemctl >/dev/null 2>&1; then
+    warn "systemctl no disponible en este sistema (¿contenedor minimalista?)"
+    warn "En un VPS normal con systemd esto no pasa. Creando servicio igual..."
+  fi
   mkdir -p /etc/systemd/system
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
