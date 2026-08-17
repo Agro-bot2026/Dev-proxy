@@ -1183,20 +1183,35 @@ show_sysinfo(){
   echo ""
   echo -e "${BOLD}${CYAN}  ============================================${NC}"
   echo ""
-  # Logo + info en 2 columnas aproximadas
-  local logo_out
-  logo_out="$($logo)"
-  echo -e "$logo_out"
-  echo ""
-  echo -e "  ${BOLD}OS:${NC}       ${OS_NAME}"
-  echo -e "  ${BOLD}Host:${NC}     ${HOST}"
-  echo -e "  ${BOLD}Kernel:${NC}   ${KERNEL}"
-  echo -e "  ${BOLD}Uptime:${NC}   ${UPTIME}"
-  echo -e "  ${BOLD}Paquetes:${NC} ${PKGS}"
-  echo -e "  ${BOLD}Shell:${NC}    ${SHELL}"
-  echo -e "  ${BOLD}CPU:${NC}      ${CPU}"
-  echo -e "  ${BOLD}Memoria:${NC}  ${MEM}"
-  echo -e "  ${BOLD}IP:${NC}       ${IP}"
+  # Logo a la IZQUIERDA + info a la DERECHA (como neofetch)
+  local logo_lines=()
+  while IFS= read -r l; do logo_lines+=("$l"); done < <("$logo")
+  local info_lines=(
+    "OS: ${OS_NAME}"
+    "Host: ${HOST}"
+    "Kernel: ${KERNEL}"
+    "Uptime: ${UPTIME}"
+    "Paquetes: ${PKGS}"
+    "Shell: ${SHELL}"
+    "CPU: ${CPU}"
+    "Memoria: ${MEM}"
+    "IP: ${IP}"
+  )
+  local max_i=${#logo_lines[@]}
+  local i
+  for ((i=0; i<max_i; i++)); do
+    if [[ $i -lt ${#info_lines[@]} ]]; then
+      printf "  %-42s  %s\n" "${logo_lines[$i]}" "${info_lines[$i]}"
+    else
+      printf "  %s\n" "${logo_lines[$i]}"
+    fi
+  done
+  # Si la info es más larga que el logo, imprimir el resto
+  if [[ ${#info_lines[@]} -gt $max_i ]]; then
+    for ((i=max_i; i<${#info_lines[@]}; i++)); do
+      printf "  %-42s  %s\n" "" "${info_lines[$i]}"
+    done
+  fi
   echo ""
   echo -e "${BOLD}${CYAN}  ============================================${NC}"
   echo ""
