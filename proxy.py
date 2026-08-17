@@ -156,7 +156,7 @@ def handle_client(client_socket, cfg):
         # 2) Responder 101
         client_socket.sendall(payload)
 
-        # 3) Separar header
+        # 3) Separar header (primer \r\n\r\n)
         header, first_packet = split_http_header(chunks)
 
         # 4) Si no vino, esperar después del 101
@@ -167,6 +167,18 @@ def handle_client(client_socket, cfg):
             except socket.timeout:
                 pass
             client_socket.settimeout(None)
+
+        # 4b) Descartar bloques HTTP residuales del payload con split:
+        #     "ACL...\r\n\r\n[split]\r\n\r\nGET- // HTTP/1.1\r\n...\r\n\r\n<paquete>"
+        #     El paquete real del túnel viene DESPUÉS del último \r\n\r\n
+        if first_packet and first_packet.count(b"\r\n\r\n") > 0:
+            # Si empieza con algo HTTP (GET/ACL/POST/[split]) → cortar en el último \r\n\r\n
+            probe = first_packet[:32]
+            if probe.startswith((b"GET", b"ACL", b"POST", b"CONNECT", b"PUT", b"HEAD", b"OPTIONS", b"[")):
+                _, first_packet = split_http_header(first_packet)
+            # Si aún quedan más bloques, repetir
+            while first_packet and first_packet.count(b"\r\n\r\n") > 0 and first_packet[:4] in (b"GET-", b"GET ", b"ACL ", b"POST", b"["):
+                _, first_packet = split_http_header(first_packet)
 
         # 5) Detectar destino
         target_host, target_port = detect_target(first_packet, cfg)
