@@ -4,6 +4,8 @@ Instalador automático de proxy WebSocket en :80 con detección de protocolos:
 
 **SSH · Psiphon · V2Ray (RAW+TLS) · OpenVPN · WireGuard**
 
+![Menú del script](menu-ghost-proxy.png)
+
 ## 🚀 Instalación (una línea)
 
 ```bash
@@ -36,6 +38,7 @@ bash <(curl -s https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/gho
 | `ghost-proxy-v14.sh` | Instalador (autoinstall + menú) |
 | `proxy.py` | Proxy multi-protocolo (detección por bytes) |
 | `badvpn-udpgw` | BadVPN UDP gateway |
+| `menu-ghost-proxy.png` | Captura del menú |
 
 ## ⚙️ Config (`/etc/ctmanager/websocket/config.json`)
 

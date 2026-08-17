@@ -455,7 +455,7 @@ EOF
   fi
   echo
   echo "💡 Comandos útiles:"
-  echo "   bash <(curl -s https://configs.charly-tricks.dev/configs/ghost-proxy-v14.sh)  → menú"
+  echo "   bash <(curl -s https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ghost-proxy-v14.sh)  → menú"
   echo "   systemctl status $SERVICE_NAME   → ver proxy"
   echo "   nano $CONFIG_FILE                → editar destinos"
   echo
