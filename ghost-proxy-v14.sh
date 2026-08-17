@@ -16,6 +16,7 @@ VERSION="14.0"
 INSTALL_DIR="/etc/ctmanager/websocket"
 CONFIG_FILE="${INSTALL_DIR}/config.json"
 SERVICE_NAME="pymanager"
+DOMAIN_FILE="${INSTALL_DIR}/dominio"
 
 # ─── De dónde baja el proxy.py (GitHub = fuente de verdad, VPS = fallback) ───
 PROXY_URL="https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/proxy.py"
@@ -445,6 +446,40 @@ clean_all(){
   echo -e "${GREEN}✅ Todo limpio — listo para instalar desde cero${NC}"
 }
 
+# ─── Dominio enlazado al VPS (para los links de usuarios) ───
+get_domain(){
+  if [[ -f "$DOMAIN_FILE" ]]; then
+    cat "$DOMAIN_FILE"
+  else
+    # Sin dominio guardado → usar la IP pública
+    curl -s --max-time 5 ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}'
+  fi
+}
+
+set_domain(){
+  need_root
+  echo ""
+  echo -e "${BOLD}${YELLOW}  🌐 DOMINIO DEL VPS${NC}"
+  echo -e "${CYAN}  ────────────────${NC}"
+  echo -e "  El dominio que apunta a este VPS (ej: pinche.chauinforme.online)."
+  echo -e "  Se usa para generar los links de usuarios (V2Ray, SSH, etc.)."
+  local actual
+  actual="$(get_domain)"
+  echo ""
+  read -p "  🌐 Dominio [actual: $actual]: " dom
+  dom="${dom:-$actual}"
+  # Limpiar espacios y http://
+  dom="$(echo "$dom" | tr -d ' ' | sed 's|https\?://||')"
+  if [[ -n "$dom" ]]; then
+    mkdir -p "$INSTALL_DIR"
+    echo "$dom" > "$DOMAIN_FILE"
+    ok "Dominio guardado: $dom"
+  else
+    warn "Dominio vacío — se sigue usando la IP"
+  fi
+  press_enter
+}
+
 # ─── Detectar gestor de paquetes (multi-distro) ───
 detect_pkg(){
   if has_cmd apt-get; then echo "apt"
@@ -786,6 +821,17 @@ EOF
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
   systemctl restart "$SERVICE_NAME" 2>/dev/null || true
   sleep 2
+  # 8) Pedir el dominio (solo si no está guardado y hay tty)
+  if [[ ! -f "$DOMAIN_FILE" && -t 0 ]]; then
+    echo ""
+    read -r -p "  🌐 ¿Dominio enlazado a este VPS? (ej: pinche.chauinforme.online) [Enter = IP]: " dom
+    if [[ -n "$dom" ]]; then
+      dom="$(echo "$dom" | tr -d ' ' | sed 's|https\?://||')"
+      mkdir -p "$INSTALL_DIR"
+      echo "$dom" > "$DOMAIN_FILE"
+      ok "Dominio guardado: $dom"
+    fi
+  fi
   echo
   echo "══════════════════════════════════════════════"
   echo " 🦇 INSTALACIÓN COMPLETADA"
@@ -837,6 +883,7 @@ menu(){
     echo " [17] 🔐 Estado WireGuard"
     echo " [18] 🔴 Instalar Psiphon server (si no está)"
     echo " [19] 🚀 Instalar Xray V2Ray (si no está)"
+    echo " [20] 🌐 Configurar dominio del VPS (para links)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -861,6 +908,7 @@ menu(){
         ;;
       18) install_psiphon; press_enter ;;
       19) install_xray; press_enter ;;
+      20) set_domain ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac

@@ -42,6 +42,15 @@ get_ip() {
     curl -s --max-time 5 ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}'
 }
 
+# ─── Dominio enlazado al VPS (para links) — usa el guardado, si no la IP ───
+get_domain() {
+    if [ -f /etc/ctmanager/websocket/dominio ]; then
+        cat /etc/ctmanager/websocket/dominio
+    else
+        get_ip
+    fi
+}
+
 # ─── Estado del sistema ───
 estado() {
     banner
@@ -97,7 +106,7 @@ crear_ssh() {
     echo -e "  👤 Usuario:  ${BOLD}$user${NC}"
     echo -e "  🔑 Password: ${BOLD}$pass${NC}"
     echo -e "  ⏳ Expira:   ${BOLD}$expDate${NC}  (se corta solo al vencer)"
-    echo -e "  🔌 Host:     $(get_ip):22"
+    echo -e "  🔌 Host:     $(get_domain):22"
     echo -e ""
     echo -e "  ${YELLOW}💡 Pasale estos datos al cliente. Cuando venza,${NC}"
     echo -e "     renovalo desde el menú (opción 6).${NC}"
@@ -152,7 +161,7 @@ crear_v2ray() {
     echo -e "  👤 Nombre:  ${BOLD}$user${NC}"
     echo -e "  🚀 UUID:    ${BOLD}$uuid${NC}"
     echo -e "  ⏳ Expira:  ${BOLD}$expDate${NC}  (se corta solo al vencer)"
-    echo -e "  🔗 Link:    ${BOLD}vless://$uuid@$(get_ip):80?type=tcp&security=none&encryption=none#Ghost-$user${NC}"
+    echo -e "  🔗 Link:    ${BOLD}vless://$uuid@$(get_domain):80?type=tcp&security=none&encryption=none#Ghost-$user${NC}"
     echo ""
     echo -e "  ${YELLOW}💡 El cliente importa el LINK en HTTP Custom (V2Ray).${NC}"
     echo -e "     Cuando venza, renovalo desde el menú (opción 6).${NC}"
