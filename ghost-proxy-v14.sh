@@ -135,11 +135,11 @@ detect_services(){
   local found_ssh=0 found_v2ray=0 found_psiphon=0 found_ovpn=0 found_wg=0
 
   # Escanear puertos LISTEN con su proceso (ss o netstat)
-  local listeners
+  local listeners=""
   if has_cmd ss; then
-    listeners="$(ss -tlnp 2>/dev/null)"
+    listeners="$(ss -tlnp 2>/dev/null || true)"
   elif has_cmd netstat; then
-    listeners="$(netstat -tlnp 2>/dev/null)"
+    listeners="$(netstat -tlnp 2>/dev/null || true)"
   fi
 
   # 1) SSH (sshd o dropbear)
@@ -319,7 +319,8 @@ install_badvpn(){
       || warn "No pude descargar badvpn. Instalalo manual en /bin/badvpn-udpgw"
   fi
   if [[ -f "$BAD_BIN" ]]; then
-    cat > /etc/systemd/system/badvpn.service <<EOF
+    mkdir -p /etc/systemd/system
+  cat > /etc/systemd/system/badvpn.service <<EOF
 [Unit]
 Description=BadVPN UDPGW (puerto ${BAD_PORT})
 After=network.target
@@ -603,6 +604,7 @@ install_psiphon(){
   fi
 
   # 3) Servicio systemd
+  mkdir -p /etc/systemd/system
   cat > /etc/systemd/system/psiphon.service <<EOF
 [Unit]
 Description=Psiphon Tunnel Server - puerto 2223 (via proxy WS ctmanager)
@@ -709,6 +711,7 @@ EOF
   fi
 
   # 4) Servicio systemd
+  mkdir -p /etc/systemd/system
   cat > /etc/systemd/system/xray.service <<EOF
 [Unit]
 Description=Xray Service
@@ -982,6 +985,7 @@ EOF
   fi
 
   # Servicio
+  mkdir -p /etc/systemd/system
   cat > /etc/systemd/system/udp-custom.service <<EOF
 [Unit]
 Description=UDP Custom
@@ -1047,7 +1051,8 @@ auto_install(){
     [[ $bad_ok -eq 1 ]] && ok "BadVPN descargado" || warn "badvpn no disponible (opcional)"
   fi
   if [[ -f "$BAD_BIN" ]]; then
-    cat > /etc/systemd/system/badvpn.service <<EOF
+    mkdir -p /etc/systemd/system
+  cat > /etc/systemd/system/badvpn.service <<EOF
 [Unit]
 Description=BadVPN UDPGW (puerto 7300)
 After=network.target
