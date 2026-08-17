@@ -579,12 +579,22 @@ EOF
   systemctl daemon-reload
   systemctl enable psiphon >/dev/null 2>&1 || true
   systemctl restart psiphon 2>/dev/null || true
-  sleep 2
+  sleep 3
   if systemctl is-active --quiet psiphon; then
     ok "Psiphon ACTIVO en :2223"
     ss -tlnp 2>/dev/null | grep -E ":2223 " | head -1 || true
   else
-    warn "Psiphon no arrancó — mirá: journalctl -u psiphon -n 20"
+    warn "Psiphon no arrancó con la IP — probando con 0.0.0.0 (fallback)..."
+    # Fallback: bindear a todas las interfaces (algunos VPS no asignan la IP al boot)
+    sed -i "s/\"ServerIPAddress\": *\"[^\"]*\"/\"ServerIPAddress\": \"0.0.0.0\"/" "$PSI_DIR/psiphond.config" 2>/dev/null
+    systemctl restart psiphon 2>/dev/null || true
+    sleep 3
+    if systemctl is-active --quiet psiphon; then
+      ok "Psiphon ACTIVO en 0.0.0.0:2223 (fallback)"
+      ss -tlnp 2>/dev/null | grep -E ":2223 " | head -1 || true
+    else
+      warn "Psiphon no arrancó — mirá: journalctl -u psiphon -n 20"
+    fi
   fi
 }
 
