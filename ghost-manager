@@ -57,10 +57,10 @@ crear_ssh() {
     local user pass horas expDate
     read -p "  👤 Nombre de usuario: " user
     [ -z "$user" ] && { echo -e "${RED}  ❌ Nombre vacío${NC}"; sleep 2; return; }
-    read -p "  ⏳ Duración (horas, ej 720 = 30d): " horas
-    horas=${horas:-720}
+    read -p "  ⏳ Duración en DÍAS (ej 30): " dias
+    dias=${dias:-30}
     pass=$(openssl rand -hex 4)
-    expDate=$(date -d "+${horas} hours" "+%Y-%m-%d %H:%M:%S")
+    expDate=$(date -d "+${dias} days" "+%Y-%m-%d %H:%M:%S")
 
     # Usuario de sistema
     if id "$user" >/dev/null 2>&1; then
@@ -68,7 +68,7 @@ crear_ssh() {
     fi
     useradd -m -s /bin/false "$user" 2>/dev/null
     echo "$user:$pass" | chpasswd
-    chage -E "$(date -d "+${horas} hours" +%Y-%m-%d)" "$user" 2>/dev/null || true
+    chage -E "$(date -d "+${dias} days" +%Y-%m-%d)" "$user" 2>/dev/null || true
     # maxlogins 1 (1 sola persona)
     mkdir -p /etc/ssh/sshd_config.d
     echo "MaxSessions 1" > "/etc/ssh/sshd_config.d/$user.conf"
@@ -95,10 +95,10 @@ crear_v2ray() {
     local user uuid horas expDate
     read -p "  👤 Nombre (identificador): " user
     [ -z "$user" ] && { echo -e "${RED}  ❌ Nombre vacío${NC}"; sleep 2; return; }
-    read -p "  ⏳ Duración (horas, ej 720 = 30d): " horas
-    horas=${horas:-720}
+    read -p "  ⏳ Duración en DÍAS (ej 30): " dias
+    dias=${dias:-30}
     uuid=$("$XRAY_BIN" uuid 2>/dev/null)
-    expDate=$(date -d "+${horas} hours" "+%Y-%m-%d %H:%M:%S")
+    expDate=$(date -d "+${dias} days" "+%Y-%m-%d %H:%M:%S")
 
     # Agregar UUID a Xray
     if [ -x "$UUID_SH" ]; then
@@ -130,10 +130,10 @@ crear_udpcustom() {
     [ -z "$user" ] && { echo -e "${RED}  ❌ Nombre vacío${NC}"; sleep 2; return; }
     read -p "  🌐 Operadora (claro/personal): " operadora
     operadora=${operadora:-claro}
-    read -p "  ⏳ Duración (horas, ej 720 = 30d): " horas
-    horas=${horas:-720}
+    read -p "  ⏳ Duración en DÍAS (ej 30): " dias
+    dias=${dias:-30}
     pass=$(openssl rand -hex 4)
-    expDate=$(date -d "+${horas} hours" "+%Y-%m-%d %H:%M:%S")
+    expDate=$(date -d "+${dias} days" "+%Y-%m-%d %H:%M:%S")
 
     # Usuario de sistema (udp-custom valida contra /etc/shadow)
     if id "$user" >/dev/null 2>&1; then
@@ -141,7 +141,7 @@ crear_udpcustom() {
     fi
     useradd -m -s /bin/false "$user" 2>/dev/null
     echo "$user:$pass" | chpasswd
-    chage -E "$(date -d "+${horas} hours" +%Y-%m-%d)" "$user" 2>/dev/null || true
+    chage -E "$(date -d "+${dias} days" +%Y-%m-%d)" "$user" 2>/dev/null || true
 
     echo ""
     echo -e "${GREEN}  ✅ USUARIO UDP CUSTOM CREADO${NC}"
@@ -263,6 +263,76 @@ eliminar() {
 }
 
 # ─── Menú principal ───
+# ─── RENOVAR (extender días a un usuario existente) ───
+renovar() {
+    local user dias nuevaExp
+    banner
+    echo -e "${BOLD}${YELLOW}  🔄 RENOVAR USUARIO${NC}"
+    echo -e "${CYAN}  ────────────────${NC}"
+    read -p "  👤 Nombre del usuario: " user
+    [ -z "$user" ] && return
+    read -p "  ⏳ Agregar cuántos DÍAS: " dias
+    dias=${dias:-30}
+
+    # Usuario de sistema (SSH/OVPN/UDP)
+    if id "$user" >/dev/null 2>&1; then
+        # Extender desde la expiración actual (si ya venció, desde hoy)
+        local expActual
+        expActual=$(chage -l "$user" 2>/dev/null | grep "Cuenta expira" | awk -F': ' '{print $2}')
+        [[ "$expActual" == *"nunca"* || -z "$expActual" ]] && expActual=$(date +%Y-%m-%d)
+        # Si ya venció, arrancar desde hoy
+        if [[ "$(date -d "$expActual" +%s)" -lt "$(date +%s)" ]]; then
+            nuevaExp=$(date -d "+${dias} days" +%Y-%m-%d)
+        else
+            nuevaExp=$(date -d "$expActual +${dias} days" +%Y-%m-%d)
+        fi
+        chage -E "$nuevaExp" "$user" 2>/dev/null || true
+        echo -e "  ${GREEN}✅ Usuario $user renovado hasta: $nuevaExp${NC}"
+    else
+        nuevaExp=$(date -d "+${dias} days" +%Y-%m-%d)
+        echo -e "  ${YELLOW}⚠️  No es usuario de sistema — igual actualizo DB${NC}"
+    fi
+
+    # DB SSH
+    if [ -f "$DB" ]; then
+        sqlite3 "$DB" "UPDATE users SET expires_at='$nuevaExp 23:59:59' WHERE username='$user';" 2>/dev/null \
+            && echo -e "  ${GREEN}✅ ssh_users.db actualizado${NC}"
+    fi
+    # DB V2Ray
+    if [ -f "$VDB" ]; then
+        sqlite3 "$VDB" "UPDATE users SET expires_at='$nuevaExp 23:59:59' WHERE username='$user';" 2>/dev/null \
+            && echo -e "  ${GREEN}✅ v2ray_users.db actualizado${NC}"
+    fi
+    # Configs en disco (renovar expiry de los .hc del usuario)
+    if ls /opt/ghost-configs/*"$user"*.hc >/dev/null 2>&1; then
+        echo -e "  ${YELLOW}⚠️  Los configs .hc en disco conservan su expiry propio." 
+        echo -e "     Regeneralos o renovalos por el bot (/renovar).${NC}"
+    fi
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+# ─── EDITAR (cambiar password de un usuario) ───
+editar() {
+    local user pass
+    banner
+    echo -e "${BOLD}${YELLOW}  ✏️  EDITAR USUARIO (cambiar clave)${NC}"
+    echo -e "${CYAN}  ────────────────────────────────${NC}"
+    read -p "  👤 Nombre del usuario: " user
+    [ -z "$user" ] && return
+
+    if id "$user" >/dev/null 2>&1; then
+        pass=$(openssl rand -hex 4)
+        echo "$user:$pass" | chpasswd 2>/dev/null
+        echo -e "  ${GREEN}✅ Clave nueva de $user: $pass${NC}"
+    else
+        echo -e "  ${RED}❌ El usuario $user no existe en el sistema${NC}"
+    fi
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+# ─── Menú principal ───
 menu() {
     while true; do
         banner
@@ -273,10 +343,12 @@ menu() {
         echo -e "  ${BOLD}${GREEN}3${NC}) 🚀 Crear usuario V2Ray"
         echo -e "  ${BOLD}${GREEN}4${NC}) 🌐 Ver estado Psiphon"
         echo -e "  ${BOLD}${GREEN}5${NC}) 👥 Listar usuarios"
-        echo -e "  ${BOLD}${RED}6${NC}) 🗑️  Eliminar usuario"
-        echo -e "  ${BOLD}${GREEN}7${NC}) 🛰️  Crear usuario UDP Custom"
-        echo -e "  ${BOLD}${GREEN}8${NC}) 🔐 Estado WireGuard"
-        echo -e "  ${BOLD}${GREEN}9${NC}) 🌐 Panel web (:8303)"
+        echo -e "  ${BOLD}${GREEN}6${NC}) 🔄 Renovar usuario (extender días)"
+        echo -e "  ${BOLD}${GREEN}7${NC}) ✏️  Editar usuario (cambiar clave)"
+        echo -e "  ${BOLD}${RED}8${NC}) 🗑️  Eliminar usuario"
+        echo -e "  ${BOLD}${GREEN}9${NC}) 🛰️  Crear usuario UDP Custom"
+        echo -e "  ${BOLD}${GREEN}10${NC}) 🔐 Estado WireGuard"
+        echo -e "  ${BOLD}${GREEN}11${NC}) 🌐 Panel web (:8303)"
         echo -e "  ${BOLD}${RED}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -286,10 +358,12 @@ menu() {
             3) crear_v2ray;;
             4) crear_psiphon;;
             5) listar;;
-            6) eliminar;;
-            7) crear_udpcustom;;
-            8) estado_wg;;
-            9) panel_web;;
+            6) renovar;;
+            7) editar;;
+            8) eliminar;;
+            9) crear_udpcustom;;
+            10) estado_wg;;
+            11) panel_web;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
