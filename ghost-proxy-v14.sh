@@ -17,9 +17,11 @@ INSTALL_DIR="/etc/ctmanager/websocket"
 CONFIG_FILE="${INSTALL_DIR}/config.json"
 SERVICE_NAME="pymanager"
 
-# ─── De dónde baja el proxy.py (tu propio server) ───
-PROXY_URL="https://configs.charly-tricks.dev/configs/proxy.py"
+# ─── De dónde baja el proxy.py (GitHub = fuente de verdad, VPS = fallback) ───
+PROXY_URL="https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/proxy.py"
 PROXY_FALLBACK="https://configs.charly-tricks.dev/configs/proxy.py"
+BADVPN_URL="https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/badvpn-udpgw"
+BADVPN_FALLBACK="https://configs.charly-tricks.dev/configs/badvpn-udpgw"
 
 BANNER_COLOR='\033[1;36m'
 GREEN='\033[1;32m'
@@ -399,10 +401,18 @@ auto_install(){
       systemctl disable "$svc" 2>/dev/null || true
     }
   done
-  # 5) badvpn (si existe binario o se puede bajar)
+  # 5) badvpn (si existe binario o se puede bajar — GitHub primero)
   local BAD_BIN="/bin/badvpn-udpgw"
   if [[ ! -f "$BAD_BIN" ]]; then
-    download_file "https://configs.charly-tricks.dev/configs/badvpn-udpgw" "$BAD_BIN" 2>/dev/null && chmod 755 "$BAD_BIN" || warn "badvpn no disponible (opcional)"
+    local bad_ok=0
+    for url in "$BADVPN_URL" "$BADVPN_FALLBACK"; do
+      if download_file "$url" "$BAD_BIN" 2>/dev/null && [[ -s "$BAD_BIN" ]]; then
+        chmod 755 "$BAD_BIN"
+        bad_ok=1
+        break
+      fi
+    done
+    [[ $bad_ok -eq 1 ]] && ok "BadVPN descargado" || warn "badvpn no disponible (opcional)"
   fi
   if [[ -f "$BAD_BIN" ]]; then
     cat > /etc/systemd/system/badvpn.service <<EOF
