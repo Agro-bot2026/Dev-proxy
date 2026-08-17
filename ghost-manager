@@ -111,7 +111,20 @@ crear_ssh() {
     echo -e "  ${YELLOW}💡 Pasale estos datos al cliente. Cuando venza,${NC}"
     echo -e "     renovalo desde el menú (opción 6).${NC}"
     echo ""
-    read -p "  ⏎ Enter para continuar..."
+    # Ofrecer el config OpenVPN armado
+    if [ -f /etc/openvpn/easy-rsa/pki/ca.crt ]; then
+        echo -e "  ${BOLD}${GREEN}1${NC}) 📋 Ver config OpenVPN (.ovpn listo para HTTP Custom)"
+        echo -e "  ${BOLD}${RED}0${NC}) Volver"
+        echo ""
+        read -p "  ➤ Opción: " ovpn_op
+        if [ "$ovpn_op" = "1" ]; then
+            ver_ovpn "$user" "$pass"
+        fi
+    else
+        echo -e "  ${YELLOW}💡 (OpenVPN no está instalado en el server — solo SSH)${NC}"
+    fi
+    echo ""
+    read -p "  ⏎ Enter para continuar..."read -p "  ⏎ Enter para continuar..."
 }
 
 # ─── Crear usuario V2Ray ───
@@ -166,7 +179,55 @@ crear_v2ray() {
     echo -e "  ${YELLOW}💡 El cliente importa el LINK en HTTP Custom (V2Ray).${NC}"
     echo -e "     Cuando venza, renovalo desde el menú (opción 6).${NC}"
     echo ""
-    read -p "  ⏎ Enter para continuar..."
+    
+}
+
+# ─── Ver config OpenVPN armado (CA + remote + payload listo) ───
+ver_ovpn() {
+    local user="$1" pass="$2"
+    local CA IP_PUB DOM
+    CA="$(cat /etc/openvpn/easy-rsa/pki/ca.crt 2>/dev/null)"
+    IP_PUB="$(get_ip)"
+    DOM="$(get_domain)"
+    banner
+    echo -e "${BOLD}${YELLOW}  📋 CONFIG OPENVPN (para HTTP Custom)${NC}"
+    echo -e "${CYAN}  ──────────────────────────────────────────${NC}"
+    echo -e "  ${BOLD}1) PAYLOAD:${NC}"
+    echo ""
+    echo -e "  ${BOLD}ACL // HTTP/1.9[lf]Host: emailmarketing.personal.com.ar[lf]Expect: 911-continue[crlf][crlf][split][crlf][crlf]GET- // HTTP/1.1[crlf]Host: ${DOM}[crlf]Connection: Upgrade[crlf] [crlf]Upgrade: websocket[crlf][crlf]${NC}"
+    echo ""
+    echo -e "  ${BOLD}2) PROXY REMOTO:${NC}  ${DOM}:80"
+    echo ""
+    echo -e "  ${BOLD}3) EDITOR DE CONFIGURACIÓN (.ovpn):${NC}"
+    echo -e "  ${CYAN}──────────────────────────────────────────${NC}"
+    cat <<EOF
+client
+dev tun
+proto tcp-client
+remote ${DOM} 80
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+remote-cert-tls server
+verb 3
+auth-user-pass
+route ${IP_PUB} 255.255.255.255 net_gateway
+route 104.18.22.183 255.255.255.255 net_gateway
+route 104.18.23.183 255.255.255.255 net_gateway
+tun-mtu 1200
+mssfix 1200
+cipher none
+auth none
+<ca>
+${CA}
+</ca>
+EOF
+    echo -e "  ${CYAN}──────────────────────────────────────────${NC}"
+    echo -e "  ${BOLD}4) USUARIO / PASSWORD:${NC}  ${user} / ${pass}"
+    echo ""
+    echo -e "  ${YELLOW}💡 Pegá el .ovpn en: HTTP Custom → OpenVPN → Editor de configuración${NC}"
+    echo -e "     Pegá el payload en: OpenVPN → Payload → Payload personalizado${NC}"
 }
 
 
