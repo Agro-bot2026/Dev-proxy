@@ -613,6 +613,97 @@ EOF
   fi
 }
 
+# ─── Instalar Xray (V2Ray: binario + config + servicio + uuid.sh) ───
+install_xray(){
+  need_root
+  echo "🚀 Instalando Xray (V2Ray)..."
+  local XRAY_BIN="/usr/local/bin/xray"
+  local XRAY_DIR="/usr/local/etc/xray"
+  local XRAY_CFG="$XRAY_DIR/config.json"
+  local UUID_SH="/usr/local/bin/xray_uuid.sh"
+
+  # 1) Binario
+  if [[ ! -x "$XRAY_BIN" ]]; then
+    if download_file "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/xray" "$XRAY_BIN"; then
+      chmod 755 "$XRAY_BIN"
+      ok "Binario xray instalado"
+    else
+      warn "No pude bajar xray"
+      press_enter
+      return 1
+    fi
+  else
+    ok "Binario xray ya existe"
+  fi
+
+  # 2) Config (con un UUID inicial aleatorio)
+  mkdir -p "$XRAY_DIR"
+  if [[ ! -f "$XRAY_CFG" ]]; then
+    local UUID_INICIAL
+    if [[ -x "$XRAY_BIN" ]]; then
+      UUID_INICIAL="$("$XRAY_BIN" uuid 2>/dev/null)"
+    fi
+    [[ -z "$UUID_INICIAL" ]] && UUID_INICIAL="$(cat /proc/sys/kernel/random/uuid 2>/dev/null)"
+    cat > "$XRAY_CFG" <<EOF
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "listen": "127.0.0.1",
+      "port": 8443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [ { "id": "$UUID_INICIAL", "flow": "" } ],
+        "decryption": "none"
+      },
+      "streamSettings": { "network": "tcp", "security": "none" }
+    }
+  ],
+  "outbounds": [ { "protocol": "freedom", "tag": "direct" } ]
+}
+EOF
+    ok "Config xray creado (UUID inicial: $UUID_INICIAL)"
+  else
+    ok "Config xray ya existe (se conserva)"
+  fi
+
+  # 3) xray_uuid.sh (gestión de UUIDs para el ghost-manager)
+  if download_file "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/xray_uuid.sh" "$UUID_SH"; then
+    chmod 755 "$UUID_SH"
+    ok "xray_uuid.sh instalado"
+  fi
+
+  # 4) Servicio systemd
+  cat > /etc/systemd/system/xray.service <<EOF
+[Unit]
+Description=Xray Service
+Documentation=https://github.com/xtls
+After=network.target nss-lookup.target
+
+[Service]
+User=nobody
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ExecStart=/usr/local/bin/xray run -config /usr/local/etc/xray/config.json
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable xray >/dev/null 2>&1 || true
+  systemctl restart xray 2>/dev/null || true
+  sleep 2
+  if systemctl is-active --quiet xray; then
+    ok "Xray ACTIVO (:8443)"
+  else
+    warn "Xray no arrancó — mirá: journalctl -u xray -n 20"
+  fi
+}
+
 # ─── Instalación AUTOMÁTICA (todo sin preguntar) ───
 auto_install(){
   need_root
@@ -684,6 +775,12 @@ EOF
   else
     ok "Psiphon ya instalado (se conserva)"
   fi
+  # 6c) Xray V2Ray (si no está instalado)
+  if ! systemctl is-active --quiet xray 2>/dev/null && [[ ! -x /usr/local/bin/xray ]]; then
+    install_xray
+  else
+    ok "Xray (V2Ray) ya instalado (se conserva)"
+  fi
   # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -736,6 +833,7 @@ menu(){
     echo " [16] 🛰️  Crear usuario UDP Custom"
     echo " [17] 🔐 Estado WireGuard"
     echo " [18] 🔴 Instalar Psiphon server (si no está)"
+    echo " [19] 🚀 Instalar Xray V2Ray (si no está)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -759,6 +857,7 @@ menu(){
         fi
         ;;
       18) install_psiphon; press_enter ;;
+      19) install_xray; press_enter ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac
