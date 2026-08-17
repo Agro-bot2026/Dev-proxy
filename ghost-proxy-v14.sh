@@ -515,6 +515,79 @@ ensure_deps_auto(){
   has_cmd curl && has_cmd python3 && ok "Dependencias instaladas" || warn "Alguna dependencia no se instaló (revisá)"
 }
 
+# ─── Instalar Psiphon (binario + config + entry + servicio) ───
+install_psiphon(){
+  need_root
+  echo "🔴 Instalando Psiphon server..."
+  local PSI_BIN="/usr/local/bin/psiphon-server"
+  local PSI_DIR="/etc/psiphon"
+
+  # 1) Binario (si no existe)
+  if [[ ! -x "$PSI_BIN" ]]; then
+    if download_file "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/psiphon-server" "$PSI_BIN"; then
+      chmod 755 "$PSI_BIN"
+      ok "Binario psiphon-server instalado"
+    else
+      warn "No pude bajar psiphon-server"
+      press_enter
+      return 1
+    fi
+  else
+    ok "Binario psiphon-server ya existe"
+  fi
+
+  # 2) Generar config + server entry (claves NUEVAS por VPS)
+  mkdir -p "$PSI_DIR"
+  local IP_PUB
+  IP_PUB="$(curl -s --max-time 5 ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
+  if [[ ! -f "$PSI_DIR/psiphond.config" ]]; then
+    warn "Generando config y server entry (claves únicas para este VPS)..."
+    (cd "$PSI_DIR" && "$PSI_BIN" -ipaddress "$IP_PUB" -protocol SSH:2223 generate >/dev/null 2>&1)
+    if [[ -f "$PSI_DIR/psiphond.config" && -f "$PSI_DIR/server-entry.dat" ]]; then
+      ok "Config + server entry generados"
+      # Copiar el entry donde lo espera el stack
+      mkdir -p /etc/ghost-license
+      cp -f "$PSI_DIR/server-entry.dat" /etc/ghost-license/psiphon-server-entry.dat 2>/dev/null
+      chmod 600 /etc/ghost-license/psiphon-server-entry.dat 2>/dev/null
+    else
+      warn "La generación falló — revisá manualmente"
+      press_enter
+      return 1
+    fi
+  else
+    ok "Config psiphond ya existe (se conserva)"
+    [[ -f "$PSI_DIR/server-entry.dat" ]] && cp -f "$PSI_DIR/server-entry.dat" /etc/ghost-license/psiphon-server-entry.dat 2>/dev/null
+  fi
+
+  # 3) Servicio systemd
+  cat > /etc/systemd/system/psiphon.service <<EOF
+[Unit]
+Description=Psiphon Tunnel Server - puerto 2223 (via proxy WS ctmanager)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${PSI_DIR}
+ExecStart=${PSI_BIN} -config ${PSI_DIR}/psiphond.config run
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable psiphon >/dev/null 2>&1 || true
+  systemctl restart psiphon 2>/dev/null || true
+  sleep 2
+  if systemctl is-active --quiet psiphon; then
+    ok "Psiphon ACTIVO en :2223"
+    ss -tlnp 2>/dev/null | grep -E ":2223 " | head -1 || true
+  else
+    warn "Psiphon no arrancó — mirá: journalctl -u psiphon -n 20"
+  fi
+}
+
 # ─── Instalación AUTOMÁTICA (todo sin preguntar) ───
 auto_install(){
   need_root
@@ -580,6 +653,12 @@ EOF
   else
     warn "No pude bajar ghost-manager (opcional — el menú sigue funcionando sin usuarios)"
   fi
+  # 6b) Psiphon server (si no está instalado)
+  if ! systemctl is-active --quiet psiphon 2>/dev/null && [[ ! -x /usr/local/bin/psiphon-server ]]; then
+    install_psiphon
+  else
+    ok "Psiphon ya instalado (se conserva)"
+  fi
   # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -632,6 +711,7 @@ menu(){
     echo " [15] 🗑️  Eliminar usuario"
     echo " [16] 🛰️  Crear usuario UDP Custom"
     echo " [17] 🔐 Estado WireGuard"
+    echo " [18] 🔴 Instalar Psiphon server (si no está)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -654,6 +734,7 @@ menu(){
           press_enter
         fi
         ;;
+      18) install_psiphon; press_enter ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac
