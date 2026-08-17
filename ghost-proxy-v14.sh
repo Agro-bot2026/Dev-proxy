@@ -198,6 +198,14 @@ detect_services(){
     found_wg=1
   fi
 
+  # IP pública del VPS (para los hosts de los servicios que bindean a la IP, ej: psiphon)
+  local IP_PUB
+  IP_PUB="$(curl -s --max-time 5 ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
+  [[ -z "$IP_PUB" ]] && IP_PUB="127.0.0.1"
+  # El psiphon-server bindea a la IP pública (no a 127.0.0.1) → usar la IP
+  local psiphon_host="$IP_PUB"
+  local ssh_host="127.0.0.1"
+
   # Escribir config.json con los puertos DETECTADOS
   cat > "$CONFIG_FILE" <<EOF
 {
@@ -213,7 +221,7 @@ detect_services(){
   "ovpn_port": ${ovpn_port},
   "v2ray_host": "127.0.0.1",
   "v2ray_port": ${v2ray_port},
-  "psiphon_host": "127.0.0.1",
+  "psiphon_host": "${psiphon_host}",
   "psiphon_port": ${psiphon_port},
   "wg_host": "127.0.0.1",
   "wg_port": ${wg_port}
