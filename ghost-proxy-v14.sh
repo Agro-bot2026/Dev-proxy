@@ -798,6 +798,9 @@ EOF
   if systemctl is-active --quiet psiphon 2>/dev/null; then
     ok "Psiphon :2223"
   fi
+  if systemctl is-active --quiet xray 2>/dev/null; then
+    ok "Xray V2Ray :8443"
+  fi
   if systemctl is-active --quiet badvpn 2>/dev/null; then
     ok "BadVPN UDPGW :7300"
   fi
