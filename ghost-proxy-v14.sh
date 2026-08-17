@@ -221,15 +221,15 @@ detect_services(){
 EOF
   chmod 644 "$CONFIG_FILE"
 
-  # Mostrar qué se detectó
-  echo "╔══════════════════════════════════════════════╗"
-  echo "║  🔎 SERVICIOS DETECTADOS                     ║"
-  echo "╚══════════════════════════════════════════════╝"
-  [[ $found_ssh -eq 1 ]]      && echo "  ✅ SSH        → ${ssh_port}"        || echo "  ⚠️  SSH        → ${ssh_port} (default)"
-  [[ $found_v2ray -eq 1 ]]    && echo "  ✅ V2Ray/Xray → ${v2ray_port}"      || echo "  ⚠️  V2Ray      → ${v2ray_port} (no detectado, queda default)"
-  [[ $found_psiphon -eq 1 ]]  && echo "  ✅ Psiphon    → ${psiphon_port}"    || echo "  ⚠️  Psiphon    → ${psiphon_port} (no detectado, queda default)"
-  [[ $found_ovpn -eq 1 ]]     && echo "  ✅ OpenVPN    → ${ovpn_port}"        || echo "  ⚠️  OpenVPN    → ${ovpn_port} (no detectado, queda default)"
-  [[ $found_wg -eq 1 ]]       && echo "  ✅ WireGuard  → ${wg_port}"          || echo "  ⚠️  WireGuard  → ${wg_port} (no detectado, queda default)"
+  # Mostrar qué se detectó (solo lo encontrado, sin ruido)
+  echo "  🔎 Servicios detectados:"
+  local detectados=0
+  [[ $found_ssh -eq 1 ]]      && { echo "    ✅ SSH → ${ssh_port}"; detectados=1; }
+  [[ $found_v2ray -eq 1 ]]    && { echo "    ✅ V2Ray → ${v2ray_port}"; detectados=1; }
+  [[ $found_psiphon -eq 1 ]]  && { echo "    ✅ Psiphon → ${psiphon_port}"; detectados=1; }
+  [[ $found_ovpn -eq 1 ]]     && { echo "    ✅ OpenVPN → ${ovpn_port}"; detectados=1; }
+  [[ $found_wg -eq 1 ]]       && { echo "    ✅ WireGuard → ${wg_port}"; detectados=1; }
+  [[ $detectados -eq 0 ]]     && echo "    ⚠️  (ninguno — se usan los puertos default)"
   echo
 }
 
@@ -581,8 +581,7 @@ EOF
   systemctl restart psiphon 2>/dev/null || true
   sleep 3
   if systemctl is-active --quiet psiphon; then
-    ok "Psiphon ACTIVO en :2223"
-    ss -tlnp 2>/dev/null | grep -E ":2223 " | head -1 || true
+    ok "Psiphon ACTIVO (:2223)"
   else
     warn "Psiphon no arrancó con la IP — probando con 0.0.0.0 (fallback)..."
     # Fallback: bindear a todas las interfaces (algunos VPS no asignan la IP al boot)
@@ -590,8 +589,7 @@ EOF
     systemctl restart psiphon 2>/dev/null || true
     sleep 3
     if systemctl is-active --quiet psiphon; then
-      ok "Psiphon ACTIVO en 0.0.0.0:2223 (fallback)"
-      ss -tlnp 2>/dev/null | grep -E ":2223 " | head -1 || true
+      ok "Psiphon ACTIVO (:2223)"
     else
       warn "Psiphon no arrancó — mirá: journalctl -u psiphon -n 20"
     fi
@@ -676,23 +674,22 @@ EOF
   sleep 2
   echo
   echo "══════════════════════════════════════════════"
-  echo " 🦇 RESULTADO AUTOINSTALL"
+  echo " 🦇 INSTALACIÓN COMPLETADA"
   echo "══════════════════════════════════════════════"
   if systemctl is-active --quiet "$SERVICE_NAME"; then
-    ok "Proxy $SERVICE_NAME ACTIVO"
-    ss -tlnp 2>/dev/null | grep -E ":80 |:443 " | head -2 || true
+    ok "Proxy WS :80"
   else
-    warn "El proxy no arrancó — puerto ocupado. Editá: nano $CONFIG_FILE (ws_port: 443)"
-    journalctl -u "$SERVICE_NAME" -n 10 --no-pager 2>/dev/null | tail -5 || true
+    warn "Proxy WS :80 no arrancó (puerto ocupado?)"
+  fi
+  if systemctl is-active --quiet psiphon 2>/dev/null; then
+    ok "Psiphon :2223"
   fi
   if systemctl is-active --quiet badvpn 2>/dev/null; then
-    ok "BadVPN ACTIVO en :7300"
+    ok "BadVPN UDPGW :7300"
   fi
+  [[ -x /usr/local/bin/ghost-manager ]] && ok "Ghost Manager (usuarios)"
   echo
-  echo "💡 Comandos útiles:"
-  echo "   bash <(curl -s https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ghost-proxy-v14.sh)  → menú"
-  echo "   systemctl status $SERVICE_NAME   → ver proxy"
-  echo "   nano $CONFIG_FILE                → editar destinos"
+  echo "💡 Escribí: ghost-manager   → para crear usuarios"
   echo
 }
 
