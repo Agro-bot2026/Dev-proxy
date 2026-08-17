@@ -244,6 +244,7 @@ EOF
 
 # ─── Servicio systemd ───
 write_service(){
+  mkdir -p /etc/systemd/system
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
 Description=Ghost Proxy WS (multi-protocolo :80)
