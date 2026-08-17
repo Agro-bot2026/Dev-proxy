@@ -127,6 +127,30 @@ def handle_client(client_socket, cfg):
             client_socket.close()
             return
 
+        # 0) Ruta especial: descargar .ovpn (GET /ovpn/archivo.ovpn)
+        if b"GET /ovpn/" in chunks:
+            try:
+                import os
+                ruta = chunks.split(b" ")[1].decode(errors="replace").lstrip("/")
+                nombre = ruta.split("/")[-1]
+                if nombre.endswith(".ovpn"):
+                    base = "/etc/ctmanager/ovpn"
+                    archivo = os.path.join(base, nombre)
+                    if os.path.realpath(archivo).startswith(os.path.realpath(base)) and os.path.isfile(archivo):
+                        data = open(archivo, "rb").read()
+                        resp = b"HTTP/1.1 200 OK\r\nContent-Type: application/x-openvpn-profile\r\nContent-Disposition: attachment; filename=" + nombre.encode() + b"\r\nContent-Length: " + str(len(data)).encode() + b"\r\n\r\n" + data
+                        client_socket.sendall(resp)
+                        client_socket.close()
+                        return
+            except Exception:
+                pass
+            try:
+                client_socket.sendall(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
+            except Exception:
+                pass
+            client_socket.close()
+            return
+
         # 2) Responder 101
         client_socket.sendall(payload)
 

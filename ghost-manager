@@ -234,15 +234,11 @@ ver_ovpn() {
     banner
     echo -e "${BOLD}${YELLOW}  📋 CONFIG OPENVPN (para HTTP Custom)${NC}"
     echo -e "${CYAN}  ──────────────────────────────────────────${NC}"
-    echo -e "  ${BOLD}1) PAYLOAD:${NC}"
-    echo ""
-    echo -e "  ${BOLD}ACL // HTTP/1.9[lf]Host: emailmarketing.personal.com.ar[lf]Expect: 911-continue[crlf][crlf][split][crlf][crlf]GET- // HTTP/1.1[crlf]Host: ${DOM}[crlf]Connection: Upgrade[crlf] [crlf]Upgrade: websocket[crlf][crlf]${NC}"
-    echo ""
-    echo -e "  ${BOLD}2) PROXY REMOTO:${NC}  ${DOM}:80"
-    echo ""
-    echo -e "  ${BOLD}3) EDITOR DE CONFIGURACIÓN (.ovpn):${NC}"
-    echo -e "  ${CYAN}──────────────────────────────────────────${NC}"
-    cat <<EOF
+
+    # 0) Generar el archivo .ovpn (para descargar con el enlace)
+    local OVPN_DIR="/etc/ctmanager/ovpn"
+    mkdir -p "$OVPN_DIR"
+    cat > "$OVPN_DIR/$user.ovpn" <<EOF
 client
 dev tun
 proto tcp-client
@@ -265,11 +261,26 @@ auth none
 ${CA}
 </ca>
 EOF
+    echo -e "  ${BOLD}${GREEN}0${NC}) 📥 DESCARGAR el .ovpn (importar en HTTP Custom)"
+    echo -e "     ${BOLD}${YELLOW}http://${DOM}/ovpn/${user}.ovpn${NC}"
+    echo -e "     Abrí ese enlace en el celular y descargalo."
+    echo -e "     Después: HTTP Custom → OpenVPN → Importar .ovpn"
+    echo -e "     Y pegale el payload de abajo + usuario/password."
+    echo ""
+    echo -e "  ${BOLD}1) PAYLOAD:${NC}"
+    echo ""
+    echo -e "  ${BOLD}ACL // HTTP/1.9[lf]Host: emailmarketing.personal.com.ar[lf]Expect: 911-continue[crlf][crlf][split][crlf][crlf]GET- // HTTP/1.1[crlf]Host: ${DOM}[crlf]Connection: Upgrade[crlf] [crlf]Upgrade: websocket[crlf][crlf]${NC}"
+    echo ""
+    echo -e "  ${BOLD}2) PROXY REMOTO:${NC}  ${DOM}:80"
+    echo ""
+    echo -e "  ${BOLD}3) EDITOR DE CONFIGURACIÓN (.ovpn) — si preferís copiar a mano:${NC}"
+    echo -e "  ${CYAN}──────────────────────────────────────────${NC}"
+    cat "$OVPN_DIR/$user.ovpn"
     echo -e "  ${CYAN}──────────────────────────────────────────${NC}"
     echo -e "  ${BOLD}4) USUARIO / PASSWORD:${NC}  ${user} / ${pass}"
     echo ""
-    echo -e "  ${YELLOW}💡 Pegá el .ovpn en: HTTP Custom → OpenVPN → Editor de configuración${NC}"
-    echo -e "     Pegá el payload en: OpenVPN → Payload → Payload personalizado${NC}"
+    echo -e "  ${YELLOW}💡 El archivo .ovpn también queda guardado en:${NC}"
+    echo -e "     $OVPN_DIR/$user.ovpn"
 }
 
 
