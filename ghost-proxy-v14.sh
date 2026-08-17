@@ -407,10 +407,34 @@ do_uninstall(){
   need_root
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
   systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+  systemctl stop badvpn 2>/dev/null || true
+  systemctl disable badvpn 2>/dev/null || true
   rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+  rm -f "/etc/systemd/system/badvpn.service"
   systemctl daemon-reload
-  ok "Servicio $SERVICE_NAME eliminado (config y proxy.py se conservan en $INSTALL_DIR)"
+  ok "Servicios eliminados ($SERVICE_NAME, badvpn)"
   press_enter
+}
+
+# ─── LIMPIEZA TOTAL (borra TODO lo anterior antes de instalar) ───
+clean_all(){
+  need_root
+  echo -e "${YELLOW}🧹 LIMPIEZA TOTAL — borrando instalaciones previas...${NC}"
+  # 1) Servicios
+  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+  systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+  systemctl stop badvpn 2>/dev/null || true
+  systemctl disable badvpn 2>/dev/null || true
+  rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+  rm -f "/etc/systemd/system/badvpn.service"
+  systemctl daemon-reload
+  # 2) Archivos del proxy
+  rm -rf "$INSTALL_DIR"
+  # 3) Ghost Manager
+  rm -f /usr/local/bin/ghost-manager
+  # 4) Binarios badvpn
+  rm -f /bin/badvpn-udpgw
+  echo -e "${GREEN}✅ Todo limpio — listo para instalar desde cero${NC}"
 }
 
 # ─── Detectar gestor de paquetes (multi-distro) ───
@@ -639,6 +663,21 @@ menu(){
 # ─── Arranque: autoinstall si se pasa "auto", si no menú ───
 if [[ "${1:-}" == "auto" || "${1:-}" == "--auto" || "${1:-}" == "-y" ]]; then
   auto_install
+  exit 0
+fi
+
+# ─── Modo LIMPIO: borra todo lo anterior y reinstala desde cero ───
+if [[ "${1:-}" == "limpio" || "${1:-}" == "--limpio" || "${1:-}" == "--clean" || "${1:-}" == "-c" ]]; then
+  echo -e "${YELLOW}⚠️  Vas a borrar TODO lo instalado (proxy, config, badvpn, manager)${NC}"
+  read -r -p "¿Confirmás? (s/N): " conf
+  if [[ "${conf,,}" == "s" || "${conf,,}" == "y" ]]; then
+    clean_all
+    echo ""
+    echo -e "${GREEN}⚡ Instalando desde cero...${NC}"
+    auto_install
+  else
+    echo "Cancelado."
+  fi
   exit 0
 fi
 
