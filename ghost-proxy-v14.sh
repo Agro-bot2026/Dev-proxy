@@ -499,10 +499,11 @@ auto_install(){
   ensure_deps_auto
   # 1) proxy.py
   download_proxy
-  # 2) config — detecta los servicios SOLO (si no existe config previa)
+  # 2) config — detecta los servicios SOLO (backup si existe)
   if [[ -f "$CONFIG_FILE" ]]; then
-    warn "Config ya existe — conservo la actual ($CONFIG_FILE)"
-    echo "   (borrala con: rm $CONFIG_FILE  y volvé a correr auto para redetectar)"
+    cp -f "$CONFIG_FILE" "${CONFIG_FILE}.bak-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+    warn "Config previa respaldada (.bak) — redetectando servicios..."
+    detect_services
   else
     detect_services
   fi
