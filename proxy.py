@@ -57,7 +57,9 @@ def forward(src, dst, _ctx=None):
         except: pass
 
 def split_http_header(data):
-    idx = data.find(b"\r\n\r\n")
+    # Cortar en el ÚLTIMO \r\n\r\n (el payload con split tiene 2 bloques HTTP:
+    # el ACL y el GET — el paquete del túnel viene DESPUÉS del último)
+    idx = data.rfind(b"\r\n\r\n")
     if idx == -1:
         return data, b""
     return data[:idx+4], data[idx+4:]
