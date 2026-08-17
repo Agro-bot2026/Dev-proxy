@@ -386,8 +386,9 @@ menu() {
         echo -e "  ${BOLD}${GREEN}7${NC}) ✏️  Editar usuario (cambiar contraseña)"
         echo -e "  ${BOLD}${RED}8${NC}) 🗑️  Eliminar usuario (cortar acceso)"
         echo -e "  ${BOLD}${CYAN}  🌐 SERVICIOS${NC}"
-        echo -e "  ${BOLD}${GREEN}9${NC}) 🔐 Estado WireGuard"
-        echo -e "  ${BOLD}${GREEN}10${NC}) 🌐 Panel web (http://IP:8303)"
+        echo -e "  ${BOLD}${GREEN}9${NC}) 🌐 Estado Psiphon (server entry)"
+        echo -e "  ${BOLD}${GREEN}10${NC}) 🔐 Estado WireGuard"
+        echo -e "  ${BOLD}${GREEN}11${NC}) 🌐 Panel web (http://IP:8303)"
         echo -e "  ${BOLD}${RED}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -400,8 +401,9 @@ menu() {
             6) renovar;;
             7) editar;;
             8) eliminar;;
-            9) estado_wg;;
-            10) panel_web;;
+            9) crear_psiphon;;
+            10) estado_wg;;
+            11) panel_web;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
