@@ -739,12 +739,39 @@ EOF
   fi
 }
 
+# ─── Habilitar EPEL en CentOS/Rocky/Alma (necesario para openvpn/wireguard) ───
+ensure_epel(){
+  local pkgm
+  pkgm="$(detect_pkg)"
+  if [[ "$pkgm" == "dnf" || "$pkgm" == "yum" ]]; then
+    # CentOS Stream 9 / Rocky / Alma
+    if [[ -f /etc/rocky-release || -f /etc/almalinux-release || -f /etc/centos-release ]]; then
+      local ver
+      ver="$(rpm -q --qf '%{VERSION}' centos-release 2>/dev/null || rpm -q --qf '%{VERSION}' rocky-release 2>/dev/null || rpm -q --qf '%{VERSION}' almalinux-release 2>/dev/null | cut -d. -f1)"
+      if ! rpm -q epel-release >/dev/null 2>&1; then
+        echo "  📦 Habilitando EPEL (necesario para OpenVPN/WireGuard)..."
+        if [[ "$pkgm" == "dnf" ]]; then
+          dnf install -y -q "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${ver}.noarch.rpm" >/dev/null 2>&1 || \
+            dnf install -y -q epel-release >/dev/null 2>&1 || true
+        else
+          yum install -y -q "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${ver}.noarch.rpm" >/dev/null 2>&1 || \
+            yum install -y -q epel-release >/dev/null 2>&1 || true
+        fi
+        rpm -q epel-release >/dev/null 2>&1 && ok "EPEL habilitado" || warn "No pude habilitar EPEL (instalá epel-release manual)"
+      fi
+    fi
+  fi
+}
+
 # ─── Instalar OpenVPN (server :1194 + easy-rsa + auth contra sistema) ───
 install_openvpn(){
   need_root
   echo "🛡️ Instalando OpenVPN server..."
   local OVPN_DIR="/etc/openvpn"
   local PKI="$OVPN_DIR/easy-rsa/pki"
+
+  # 0) EPEL en CentOS/Rocky/Alma (openvpn y easy-rsa viven ahí)
+  ensure_epel
 
   # 1) Paquetes
   if ! command -v openvpn >/dev/null 2>&1; then
@@ -883,6 +910,8 @@ EOF
 install_wireguard(){
   need_root
   echo "🔐 Instalando WireGuard..."
+  # EPEL en CentOS/Rocky/Alma (wireguard-tools vive ahí)
+  ensure_epel
   if ! command -v wg >/dev/null 2>&1; then
     pkg_install wireguard wireguard-tools >/dev/null 2>&1 || \
       apt-get install -y -qq wireguard wireguard-tools >/dev/null 2>&1 || true
