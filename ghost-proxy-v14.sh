@@ -739,6 +739,236 @@ EOF
   fi
 }
 
+# ─── Instalar OpenVPN (server :1194 + easy-rsa + auth contra sistema) ───
+install_openvpn(){
+  need_root
+  echo "🛡️ Instalando OpenVPN server..."
+  local OVPN_DIR="/etc/openvpn"
+  local PKI="$OVPN_DIR/easy-rsa/pki"
+
+  # 1) Paquetes
+  if ! command -v openvpn >/dev/null 2>&1; then
+    pkg_install openvpn easy-rsa >/dev/null 2>&1 || pkg_install openvpn >/dev/null 2>&1 || true
+    apt-get install -y -qq openvpn easy-rsa openssl >/dev/null 2>&1 || true
+  fi
+  command -v openvpn >/dev/null 2>&1 || { warn "No pude instalar openvpn"; press_enter; return 1; }
+  ok "openvpn instalado"
+
+  # 2) Certificados (easy-rsa)
+  if [[ ! -f "$PKI/ca.crt" || ! -f "$PKI/issued/server.crt" ]]; then
+    warn "Generando certificados (easy-rsa)..."
+    rm -rf /tmp/easyrsa-gen && mkdir -p /tmp/easyrsa-gen
+    cd /tmp/easyrsa-gen
+    if command -v easy-rsa >/dev/null 2>&1; then
+      EASYRSA_BIN="$(command -v easy-rsa)"
+    else
+      EASYRSA_BIN="/usr/share/easy-rsa/easyrsa"
+    fi
+    if [[ -x "$EASYRSA_BIN" || -f "$EASYRSA_BIN" ]]; then
+      "$EASYRSA_BIN" init-pki >/dev/null 2>&1 || true
+      "$EASYRSA_BIN" build-ca nopass <<< "ghost" >/dev/null 2>&1 || true
+      "$EASYRSA_BIN" gen-dh >/dev/null 2>&1 || true
+      "$EASYRSA_BIN" build-server-full server nopass >/dev/null 2>&1 || true
+    else
+      warn "easy-rsa no encontrado — intentando con openssl directo..."
+    fi
+    # Copiar el pki generado
+    if [[ -d /tmp/easyrsa-gen/pki ]]; then
+      mkdir -p "$PKI"
+      cp -r /tmp/easyrsa-gen/pki/* "$PKI/" 2>/dev/null
+    fi
+  fi
+
+  if [[ -f "$PKI/ca.crt" && -f "$PKI/issued/server.crt" ]]; then
+    ok "Certificados listos"
+  else
+    warn "Certificados incompletos — revisá easy-rsa manualmente"
+    press_enter
+    return 1
+  fi
+
+  # 3) auth_check.sh (autenticación contra usuarios del sistema)
+  cat > "$OVPN_DIR/auth_check.sh" <<'EOF'
+#!/bin/bash
+set -e
+USER="${USERNAME:-$username}"
+PASS="${PASSWORD:-$password}"
+if [ -z "$USER" ] || [ -z "$PASS" ]; then exit 1; fi
+python3 - "$USER" "$PASS" << 'PYEOF'
+import sys, crypt, spwd, time
+user, password = sys.argv[1], sys.argv[2]
+try:
+    shadow = spwd.getspnam(user)
+except KeyError:
+    sys.exit(1)
+if shadow.sp_expire and shadow.sp_expire > 0 and shadow.sp_expire < int(time.time()//86400):
+    sys.exit(1)
+h = shadow.sp_pwdp
+if h in ('!', '*', ''):
+    sys.exit(1)
+sys.exit(0 if crypt.crypt(password, h) == h else 1)
+PYEOF
+EOF
+  chmod 755 "$OVPN_DIR/auth_check.sh"
+  ok "auth_check.sh creado"
+
+  # 4) server.conf
+  cat > "$OVPN_DIR/server.conf" <<'EOF'
+# 🦇 OpenVPN server - TCP 1194 (a través del proxy WS del ctmanager)
+port 1194
+proto tcp
+dev tun
+
+# Certificados
+ca /etc/openvpn/easy-rsa/pki/ca.crt
+cert /etc/openvpn/easy-rsa/pki/issued/server.crt
+key /etc/openvpn/easy-rsa/pki/private/server.key
+dh /etc/openvpn/easy-rsa/pki/dh.pem
+
+# Autenticación por usuario/contraseña (contra usuarios del sistema)
+auth-user-pass-verify /etc/openvpn/auth_check.sh via-env
+verify-client-cert none
+username-as-common-name
+script-security 3
+
+# Red interna
+server 10.8.0.0 255.255.255.0
+topology subnet
+push "redirect-gateway def1 bypass-dhcp"
+push "dhcp-option DNS 1.1.1.1"
+push "dhcp-option DNS 8.8.8.8"
+
+keepalive 10 120
+persist-key
+persist-tun
+
+# Seguridad
+cipher none
+auth none
+
+status /var/log/openvpn-status.log
+log-append /var/log/openvpn.log
+verb 3
+tun-mtu 1200
+mssfix 1200
+duplicate-cn
+EOF
+  ok "server.conf creado"
+
+  # 5) Servicio + IP forwarding
+  sed -i 's/^#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf 2>/dev/null
+  echo 1 > /proc/sys/net/ipv4/ip_forward
+  systemctl daemon-reload
+  systemctl enable openvpn@server >/dev/null 2>&1 || true
+  systemctl restart openvpn@server 2>/dev/null || true
+  sleep 2
+  if systemctl is-active --quiet openvpn@server; then
+    ok "OpenVPN ACTIVO (:1194)"
+  else
+    warn "OpenVPN no arrancó — mirá: journalctl -u openvpn@server -n 20"
+  fi
+}
+
+# ─── Instalar WireGuard (wg0 + bridge TCP) ───
+install_wireguard(){
+  need_root
+  echo "🔐 Instalando WireGuard..."
+  if ! command -v wg >/dev/null 2>&1; then
+    pkg_install wireguard wireguard-tools >/dev/null 2>&1 || \
+      apt-get install -y -qq wireguard wireguard-tools >/dev/null 2>&1 || true
+  fi
+  command -v wg >/dev/null 2>&1 || { warn "No pude instalar wireguard"; press_enter; return 1; }
+  ok "wireguard instalado"
+
+  # Config wg0 (claves nuevas por VPS)
+  if [[ ! -f /etc/wireguard/wg0.conf ]]; then
+    mkdir -p /etc/wireguard
+    local PRIV WG_PUB
+    PRIV="$(wg genkey 2>/dev/null)"
+    WG_PUB="$(echo "$PRIV" | wg pubkey 2>/dev/null)"
+    cat > /etc/wireguard/wg0.conf <<EOF
+[Interface]
+PrivateKey = ${PRIV}
+Address = 10.9.0.1/24
+ListenPort = 51820
+SaveConfig = false
+EOF
+    chmod 600 /etc/wireguard/wg0.conf
+    ok "wg0.conf creado (pubkey: ${WG_PUB:0:20}...)"
+  else
+    ok "wg0.conf ya existe (se conserva)"
+  fi
+
+  systemctl enable wg-quick@wg0 >/dev/null 2>&1 || true
+  systemctl restart wg-quick@wg0 2>/dev/null || true
+  sleep 2
+  if systemctl is-active --quiet wg-quick@wg0; then
+    ok "WireGuard ACTIVO (10.9.0.1, :51820)"
+  else
+    warn "WireGuard no arrancó — mirá: journalctl -u wg-quick@wg0 -n 15"
+  fi
+}
+
+# ─── Instalar UDP Custom (binario + servicio) ───
+install_udpcustom(){
+  need_root
+  echo "🛰️ Instalando UDP Custom..."
+  local UDP_BIN="/usr/local/bin/udp-custom"
+  local UDP_DIR="/root/udp"
+
+  # El binario udp-custom es propietario — buscar local o avisar
+  if [[ ! -x "$UDP_BIN" ]]; then
+    if [[ -f /root/udp/udp-custom ]]; then
+      cp /root/udp/udp-custom "$UDP_BIN" && chmod 755 "$UDP_BIN"
+      ok "Binario udp-custom instalado (desde /root/udp)"
+    else
+      warn "No hay binario udp-custom en el VPS."
+      warn "Ponelo en /root/udp/udp-custom y volvé a correr esta opción."
+      press_enter
+      return 1
+    fi
+  fi
+
+  # Config
+  mkdir -p "$UDP_DIR"
+  if [[ ! -f "$UDP_DIR/config.json" ]]; then
+    cat > "$UDP_DIR/config.json" <<'EOF'
+{
+  "listen": ":36712",
+  "auth": "udpprueba2026",
+  "dns": "8.8.8.8"
+}
+EOF
+    ok "config.json creado (:36712)"
+  fi
+
+  # Servicio
+  cat > /etc/systemd/system/udp-custom.service <<EOF
+[Unit]
+Description=UDP Custom
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=${UDP_DIR}
+ExecStart=${UDP_BIN} -config ${UDP_DIR}/config.json
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable udp-custom >/dev/null 2>&1 || true
+  systemctl restart udp-custom 2>/dev/null || true
+  sleep 2
+  if systemctl is-active --quiet udp-custom; then
+    ok "UDP Custom ACTIVO (:36712)"
+  else
+    warn "UDP Custom no arrancó — mirá: journalctl -u udp-custom -n 15"
+  fi
+}
+
 # ─── Instalación AUTOMÁTICA (todo sin preguntar) ───
 auto_install(){
   need_root
@@ -816,6 +1046,18 @@ EOF
   else
     ok "Xray (V2Ray) ya instalado (se conserva)"
   fi
+  # 6d) OpenVPN (si no está instalado)
+  if ! systemctl is-active --quiet openvpn@server 2>/dev/null; then
+    install_openvpn
+  else
+    ok "OpenVPN ya instalado (se conserva)"
+  fi
+  # 6e) WireGuard (si no está instalado)
+  if ! systemctl is-active --quiet wg-quick@wg0 2>/dev/null; then
+    install_wireguard
+  else
+    ok "WireGuard ya instalado (se conserva)"
+  fi
   # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -846,6 +1088,12 @@ EOF
   fi
   if systemctl is-active --quiet xray 2>/dev/null; then
     ok "Xray V2Ray :8443"
+  fi
+  if systemctl is-active --quiet openvpn@server 2>/dev/null; then
+    ok "OpenVPN :1194"
+  fi
+  if systemctl is-active --quiet wg-quick@wg0 2>/dev/null; then
+    ok "WireGuard :51820"
   fi
   if systemctl is-active --quiet badvpn 2>/dev/null; then
     ok "BadVPN UDPGW :7300"
@@ -884,6 +1132,9 @@ menu(){
     echo " [18] 🔴 Instalar Psiphon server (si no está)"
     echo " [19] 🚀 Instalar Xray V2Ray (si no está)"
     echo " [20] 🌐 Configurar dominio del VPS (para links)"
+    echo " [21] 🛡️  Instalar OpenVPN (si no está)"
+    echo " [22] 🔐 Instalar WireGuard (si no está)"
+    echo " [23] 🛰️  Instalar UDP Custom (si no está)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -909,6 +1160,9 @@ menu(){
       18) install_psiphon; press_enter ;;
       19) install_xray; press_enter ;;
       20) set_domain ;;
+      21) install_openvpn; press_enter ;;
+      22) install_wireguard; press_enter ;;
+      23) install_udpcustom; press_enter ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac
