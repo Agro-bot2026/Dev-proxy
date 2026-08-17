@@ -576,6 +576,15 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
+  # 4) Forzar banner SSH-2.0-Go (el proxy lo detecta por ese banner)
+  if grep -q '"SSHServerVersion"' "$PSI_DIR/psiphond.config" 2>/dev/null; then
+    sed -i 's/"SSHServerVersion"[[:space:]]*:[[:space:]]*"[^"]*"/"SSHServerVersion": "SSH-2.0-Go"/' "$PSI_DIR/psiphond.config"
+    ok "Banner SSH-2.0-Go configurado (detección Psiphon del proxy)"
+  else
+    # Si no existe el campo, agregarlo
+    sed -i 's/"ServerIPAddress"[[:space:]]*:[[:space:]]*"[^"]*"/&\n    "SSHServerVersion": "SSH-2.0-Go",/' "$PSI_DIR/psiphond.config" 2>/dev/null || true
+    ok "Banner SSH-2.0-Go agregado al config"
+  fi
   systemctl daemon-reload
   systemctl enable psiphon >/dev/null 2>&1 || true
   systemctl restart psiphon 2>/dev/null || true
