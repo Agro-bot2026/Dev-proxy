@@ -160,6 +160,10 @@ detect_services(){
     v2ray_port="$(echo "$listeners" | grep -E 'xray|v2ray' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
     [[ -z "$v2ray_port" ]] && v2ray_port=8443
     found_v2ray=1
+  elif echo "$listeners" | grep -qE ':8443\s'; then
+    # Puerto 8443 ocupado por cualquier proceso → asumir V2Ray
+    v2ray_port=8443
+    found_v2ray=1
   fi
 
   # 3) Psiphon
@@ -169,6 +173,10 @@ detect_services(){
     psiphon_port="$(echo "$listeners" | grep -E 'psiphon' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
     [[ -z "$psiphon_port" ]] && psiphon_port=2223
     found_psiphon=1
+  elif echo "$listeners" | grep -qE ':2223\s'; then
+    # Puerto 2223 ocupado → asumir Psiphon
+    psiphon_port=2223
+    found_psiphon=1
   fi
 
   # 4) OpenVPN
@@ -177,6 +185,10 @@ detect_services(){
   if [[ -n "$ovpn_pid" ]]; then
     ovpn_port="$(echo "$listeners" | grep -E 'openvpn' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
     [[ -z "$ovpn_port" ]] && ovpn_port=1194
+    found_ovpn=1
+  elif echo "$listeners" | grep -qE ':1194\s'; then
+    # Puerto 1194 ocupado → asumir OpenVPN
+    ovpn_port=1194
     found_ovpn=1
   fi
 
