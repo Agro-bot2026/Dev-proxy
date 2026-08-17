@@ -34,6 +34,9 @@ banner() {
     echo ""
 }
 
+# ─── Utilidades ───
+has_cmd(){ command -v "$1" >/dev/null 2>&1; }
+
 # ─── Detectar IP pública ───
 get_ip() {
     curl -s --max-time 5 ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}'
@@ -104,19 +107,39 @@ crear_ssh() {
 
 # ─── Crear usuario V2Ray ───
 crear_v2ray() {
-    local user uuid horas expDate
-    read -p "  👤 Nombre (identificador): " user
+    local user uuid dias expDate
+    banner
+    echo -e "${BOLD}${YELLOW}  🚀 CREAR USUARIO V2RAY${NC}"
+    echo -e "${CYAN}  ────────────────────${NC}"
+    echo -e "  ${BOLD}El sistema genera el UUID SOLO — el cliente solo importa el link.${NC}"
+    echo ""
+    read -p "  👤 Nombre (identificador, ej: juan): " user
     [ -z "$user" ] && { echo -e "${RED}  ❌ Nombre vacío${NC}"; sleep 2; return; }
-    read -p "  ⏳ Duración en DÍAS (ej 30): " dias
+    read -p "  ⏳ ¿Cuántos DÍAS dura? (ej 30 = 1 mes): " dias
     dias=${dias:-30}
-    uuid=$("$XRAY_BIN" uuid 2>/dev/null)
+    # Generar UUID (fallback: xray → uuidgen → /proc → openssl)
+    uuid=""
+    if [ -x "$XRAY_BIN" ]; then
+        uuid=$("$XRAY_BIN" uuid 2>/dev/null)
+    fi
+    if [ -z "$uuid" ] && has_cmd uuidgen; then
+        uuid=$(uuidgen 2>/dev/null)
+    fi
+    if [ -z "$uuid" ] && [ -f /proc/sys/kernel/random/uuid ]; then
+        uuid=$(cat /proc/sys/kernel/random/uuid 2>/dev/null)
+    fi
+    if [ -z "$uuid" ] && has_cmd openssl; then
+        uuid=$(openssl rand -hex 16 | sed -E 's/(.{8})(.{4})(.{4})(.{4})(.{12})/\1-\2-\3-\4-\5/')
+    fi
+    [ -z "$uuid" ] && { echo -e "${RED}  ❌ No pude generar UUID (falta xray/uuidgen/openssl)${NC}"; sleep 2; return; }
     expDate=$(date -d "+${dias} days" "+%Y-%m-%d %H:%M:%S")
 
-    # Agregar UUID a Xray
+    # Agregar UUID a Xray (si existe)
     if [ -x "$UUID_SH" ]; then
         "$UUID_SH" add "$uuid" && "$UUID_SH" reload
     else
-        echo -e "${YELLOW}  ⚠️  xray_uuid.sh no existe — UUID agregado solo en DB${NC}"
+        echo -e "${YELLOW}  ⚠️  xray_uuid.sh no existe — UUID guardado en DB${NC}"
+        echo -e "     (si el VPS no tiene Xray, el link se genera igual)"
     fi
 
     mkdir -p "$CFG_DIR"
@@ -124,12 +147,15 @@ crear_v2ray() {
     sqlite3 "$VDB" "INSERT OR REPLACE INTO users (username, uuid, expires_at) VALUES ('$user','$uuid','$expDate');" 2>/dev/null
 
     echo ""
-    echo -e "${GREEN}  ✅ USUARIO V2RAY CREADO${NC}"
-    echo -e "${CYAN}  ──────────────────────────${NC}"
+    echo -e "${GREEN}  ✅ ¡USUARIO V2RAY CREADO! Guardá estos datos:${NC}"
+    echo -e "${CYAN}  ──────────────────────────────────────${NC}"
     echo -e "  👤 Nombre:  ${BOLD}$user${NC}"
     echo -e "  🚀 UUID:    ${BOLD}$uuid${NC}"
-    echo -e "  ⏳ Expira:  $expDate"
-    echo -e "  🔗 Link:    vless://$uuid@$(get_ip):80?type=tcp&security=none&encryption=none#Ghost-$user"
+    echo -e "  ⏳ Expira:  ${BOLD}$expDate${NC}  (se corta solo al vencer)"
+    echo -e "  🔗 Link:    ${BOLD}vless://$uuid@$(get_ip):80?type=tcp&security=none&encryption=none#Ghost-$user${NC}"
+    echo ""
+    echo -e "  ${YELLOW}💡 El cliente importa el LINK en HTTP Custom (V2Ray).${NC}"
+    echo -e "     Cuando venza, renovalo desde el menú (opción 6).${NC}"
     echo ""
     read -p "  ⏎ Enter para continuar..."
 }
