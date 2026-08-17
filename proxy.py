@@ -169,16 +169,17 @@ def handle_client(client_socket, cfg):
             client_socket.settimeout(None)
 
         # 4b) Descartar bloques HTTP residuales del payload con split:
-        #     "ACL...\r\n\r\n[split]\r\n\r\nGET- // HTTP/1.1\r\n...\r\n\r\n<paquete>"
-        #     El paquete real del túnel viene DESPUÉS del último \r\n\r\n
-        if first_packet and first_packet.count(b"\r\n\r\n") > 0:
-            # Si empieza con algo HTTP (GET/ACL/POST/[split]) → cortar en el último \r\n\r\n
+        #     El cliente manda: "ACL...\r\n\r\n" → 101 → "GET- // HTTP/1.1\r\n...\r\n\r\n<paquete>"
+        #     El paquete real del túnel viene DESPUÉS del ÚLTIMO \r\n\r\n del segundo bloque
+        if first_packet:
             probe = first_packet[:32]
-            if probe.startswith((b"GET", b"ACL", b"POST", b"CONNECT", b"PUT", b"HEAD", b"OPTIONS", b"[")):
-                _, first_packet = split_http_header(first_packet)
-            # Si aún quedan más bloques, repetir
-            while first_packet and first_packet.count(b"\r\n\r\n") > 0 and first_packet[:4] in (b"GET-", b"GET ", b"ACL ", b"POST", b"["):
-                _, first_packet = split_http_header(first_packet)
+            # Si empieza con algo HTTP (GET/ACL/POST/[split]/Upgrade) → cortar en el último \r\n\r\n
+            if probe.startswith((b"GET", b"ACL", b"POST", b"CONNECT", b"PUT", b"HEAD", b"OPTIONS", b"[", b"Upgrade")):
+                idx = first_packet.rfind(b"\r\n\r\n")
+                if idx != -1:
+                    first_packet = first_packet[idx+4:]
+                else:
+                    first_packet = b""
 
         # 5) Detectar destino
         target_host, target_port = detect_target(first_packet, cfg)
