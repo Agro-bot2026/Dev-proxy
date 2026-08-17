@@ -689,7 +689,7 @@ EOF
   fi
   [[ -x /usr/local/bin/ghost-manager ]] && ok "Ghost Manager (usuarios)"
   echo
-  echo "💡 Escribí: ghost-manager   → para crear usuarios"
+  echo "💡 Escribí: ghost-manager   → para entrar al menú"
   echo
 }
 
