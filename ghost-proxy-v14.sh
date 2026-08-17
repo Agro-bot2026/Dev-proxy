@@ -1021,6 +1021,13 @@ EOF
 auto_install(){
   need_root
   echo -e "${GREEN}⚡ AUTOINSTALL: Ghost Proxy v14${NC}"
+  echo -e "${CYAN}──────────────────────────────────────────${NC}"
+  echo -e "  📦 Compatible con:"
+  echo -e "  ✅ Ubuntu 22-26 (apt)"
+  echo -e "  ✅ Debian 12-13+ (apt)"
+  echo -e "  ✅ Rocky / Alma / CentOS Stream 9 (dnf + EPEL automático)"
+  echo -e "  ✅ También: Fedora, Arch, Alpine, openSUSE"
+  echo -e "${CYAN}──────────────────────────────────────────${NC}"
   # 0) dependencias primero
   ensure_deps_auto
   # 1) proxy.py
