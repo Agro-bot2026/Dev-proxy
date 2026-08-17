@@ -126,6 +126,101 @@ EOF
   fi
 }
 
+# ─── DETECCIÓN AUTOMÁTICA de servicios (SSH/V2Ray/Psiphon/OVPN/WG) ───
+# Escanea los puertos LISTEN del VPS y mapea los destinos SOLO
+detect_services(){
+  echo "🔎 Detectando servicios del VPS..."
+  local ssh_port=22 v2ray_port=8443 psiphon_port=2223 ovpn_port=1194 wg_port=51821
+  local found_ssh=0 found_v2ray=0 found_psiphon=0 found_ovpn=0 found_wg=0
+
+  # Escanear puertos LISTEN con su proceso (ss o netstat)
+  local listeners
+  if has_cmd ss; then
+    listeners="$(ss -tlnp 2>/dev/null)"
+  elif has_cmd netstat; then
+    listeners="$(netstat -tlnp 2>/dev/null)"
+  fi
+
+  # 1) SSH (sshd o dropbear)
+  local ssh_pid
+  ssh_pid="$(pgrep -f 'sshd|dropbear' 2>/dev/null | head -1 || true)"
+  if [[ -n "$ssh_pid" ]]; then
+    ssh_port="$(echo "$listeners" | grep -E 'sshd|dropbear' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
+    [[ -z "$ssh_port" ]] && ssh_port=22
+    found_ssh=1
+  else
+    # sshd puede estar con otro nombre — probar puerto 22 directo
+    echo "$listeners" | grep -qE ':22\s' && { ssh_port=22; found_ssh=1; }
+  fi
+
+  # 2) V2Ray / Xray
+  local v2ray_pid
+  v2ray_pid="$(pgrep -f 'xray|v2ray' 2>/dev/null | head -1 || true)"
+  if [[ -n "$v2ray_pid" ]]; then
+    v2ray_port="$(echo "$listeners" | grep -E 'xray|v2ray' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
+    [[ -z "$v2ray_port" ]] && v2ray_port=8443
+    found_v2ray=1
+  fi
+
+  # 3) Psiphon
+  local psiphon_pid
+  psiphon_pid="$(pgrep -f 'psiphon' 2>/dev/null | head -1 || true)"
+  if [[ -n "$psiphon_pid" ]]; then
+    psiphon_port="$(echo "$listeners" | grep -E 'psiphon' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
+    [[ -z "$psiphon_port" ]] && psiphon_port=2223
+    found_psiphon=1
+  fi
+
+  # 4) OpenVPN
+  local ovpn_pid
+  ovpn_pid="$(pgrep -f 'openvpn' 2>/dev/null | head -1 || true)"
+  if [[ -n "$ovpn_pid" ]]; then
+    ovpn_port="$(echo "$listeners" | grep -E 'openvpn' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
+    [[ -z "$ovpn_port" ]] && ovpn_port=1194
+    found_ovpn=1
+  fi
+
+  # 5) WireGuard (interfaz wg* o puerto 51821)
+  if ip link show 2>/dev/null | grep -qE '^[0-9]+: wg'; then
+    wg_port=51821
+    found_wg=1
+  fi
+
+  # Escribir config.json con los puertos DETECTADOS
+  cat > "$CONFIG_FILE" <<EOF
+{
+  "ws_port": 80,
+  "wss_port": 443,
+  "target_host": "127.0.0.1",
+  "target_port": ${ssh_port},
+  "payload": "101",
+  "enable_ws": true,
+  "enable_wss": false,
+  "max_connections_per_user": 50,
+  "ovpn_host": "127.0.0.1",
+  "ovpn_port": ${ovpn_port},
+  "v2ray_host": "127.0.0.1",
+  "v2ray_port": ${v2ray_port},
+  "psiphon_host": "127.0.0.1",
+  "psiphon_port": ${psiphon_port},
+  "wg_host": "127.0.0.1",
+  "wg_port": ${wg_port}
+}
+EOF
+  chmod 644 "$CONFIG_FILE"
+
+  # Mostrar qué se detectó
+  echo "╔══════════════════════════════════════════════╗"
+  echo "║  🔎 SERVICIOS DETECTADOS                     ║"
+  echo "╚══════════════════════════════════════════════╝"
+  [[ $found_ssh -eq 1 ]]      && echo "  ✅ SSH        → ${ssh_port}"        || echo "  ⚠️  SSH        → ${ssh_port} (default)"
+  [[ $found_v2ray -eq 1 ]]    && echo "  ✅ V2Ray/Xray → ${v2ray_port}"      || echo "  ⚠️  V2Ray      → ${v2ray_port} (no detectado, queda default)"
+  [[ $found_psiphon -eq 1 ]]  && echo "  ✅ Psiphon    → ${psiphon_port}"    || echo "  ⚠️  Psiphon    → ${psiphon_port} (no detectado, queda default)"
+  [[ $found_ovpn -eq 1 ]]     && echo "  ✅ OpenVPN    → ${ovpn_port}"        || echo "  ⚠️  OpenVPN    → ${ovpn_port} (no detectado, queda default)"
+  [[ $found_wg -eq 1 ]]       && echo "  ✅ WireGuard  → ${wg_port}"          || echo "  ⚠️  WireGuard  → ${wg_port} (no detectado, queda default)"
+  echo
+}
+
 # ─── Servicio systemd ───
 write_service(){
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
@@ -369,6 +464,8 @@ ensure_deps_auto(){
   has_cmd python3 || faltan+=(python3)
   has_cmd systemctl || faltan+=(systemd systemd-sysv)
   has_cmd ss || has_cmd netstat || faltan+=(iproute2 net-tools)
+  has_cmd pgrep || faltan+=(procps)
+  has_cmd ip || faltan+=(iproute2)
   [[ ${#faltan[@]} -eq 0 ]] && { ok "Dependencias OK (curl/wget, python3, systemd)"; return 0; }
 
   warn "Faltan: ${faltan[*]} — instalando automáticamente..."
@@ -390,8 +487,13 @@ auto_install(){
   ensure_deps_auto
   # 1) proxy.py
   download_proxy
-  # 2) config
-  write_config
+  # 2) config — detecta los servicios SOLO (si no existe config previa)
+  if [[ -f "$CONFIG_FILE" ]]; then
+    warn "Config ya existe — conservo la actual ($CONFIG_FILE)"
+    echo "   (borrala con: rm $CONFIG_FILE  y volvé a correr auto para redetectar)"
+  else
+    detect_services
+  fi
   # 3) servicio
   write_service
   # 4) liberar puertos (web servers)
