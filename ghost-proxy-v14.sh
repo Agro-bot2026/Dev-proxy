@@ -765,12 +765,12 @@ install_openvpn(){
       EASYRSA_BIN="/usr/share/easy-rsa/easyrsa"
     fi
     if [[ -x "$EASYRSA_BIN" || -f "$EASYRSA_BIN" ]]; then
-      export EASYRSA_BATCH=1 EASYRSA_REQ_CN=ghost EASYRSA_ALGO=ec
+      export EASYRSA_BATCH=1 EASYRSA_ALGO=ec
       "$EASYRSA_BIN" init-pki >/dev/null 2>&1 || true
       "$EASYRSA_BIN" build-ca nopass >/dev/null 2>&1 || true
       "$EASYRSA_BIN" gen-dh >/dev/null 2>&1 || true
       "$EASYRSA_BIN" build-server-full server nopass >/dev/null 2>&1 || true
-      unset EASYRSA_BATCH EASYRSA_REQ_CN EASYRSA_ALGO
+      unset EASYRSA_BATCH EASYRSA_ALGO
     else
       warn "easy-rsa no encontrado — intentando con openssl directo..."
     fi
