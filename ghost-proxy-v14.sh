@@ -1041,84 +1041,69 @@ detect_distro(){
 
 logo_ubuntu(){
   echo -e "${BOLD}${RED}"
-  echo "        .-/+oossssoo+/-."
-  echo "     \`:+ssssssssssssssss+:·"
-  echo "    -+ssssssssssssssssssyys+-"
-  echo "  .ossssssssssssssssssdMMMNysso."
-  echo " /ssssssssssshdmmNNmmyNMMMMhssss/"
-  echo "+sssssssshmdMMMMMMMNddddysssssss+"
-  echo ".ssssssssNMMMMMMMhssssssssssssss."
-  echo "+ssssssssydsssssssssssssssssssss+"
+  echo "  .-/+oossssoo+/-."
+  echo " :+ssssssssssss+:. "
+  echo "-+ssssssssssssssss+-"
+  echo " :+ssssssssssss+:. "
+  echo "  .-/+oossssoo+/-."
   echo -e "${NC}"
 }
 
 logo_debian(){
   echo -e "${BOLD}${RED}"
-  echo "    _,met\$\$\$\$\$gg."
-  echo "  ,g\$\$\$\$\$\$\$\$\$\$\$\$\$\$\$P."
-  echo " ,g\$\$P\"\"       \"\"\"Y\$\$."
-  echo " \$\$P'            \`\$\$\$."
-  echo " \$\$P      ,gg.     \`\$\$b"
-  echo " \$\$       i\$\$\$\$\i    \`\$\$\$"
-  echo " \`\$\$       \`\$\$\$'    \$\$\$'"
-  echo "  \`\$\$\$.     \`\$'   .\$\$'"
-  echo "    \"\$\$\$ggg,___ggg\$\$\$\""
+  echo "   ,met\$\$\$\$gg."
+  echo " ,g\$\$\$\$\$\$\$\$\$\$P."
+  echo ",\$\$P     \`Y\$\$."
+  echo " \`\$\$      ,\$\$."
+  echo "  \"\$\$\$ggg\$\$\$\""
   echo -e "${NC}"
 }
 
 logo_redhat(){
   echo -e "${BOLD}${BLUE}"
-  echo "        (o)(o)"
-  echo "       /  __  \\"
-  echo "      /  (  )  \\"
-  echo "     /    \/    \\"
-  echo "    /            \\"
-  echo "   /              \\"
-  echo "  /________________\\"
-  echo "   |  RHEL-FAMILY |"
+  echo "   (o)(o)"
+  echo "  /  __  \\"
+  echo " /  (  )  \\"
+  echo " |  \\__/  |"
+  echo "  \\______/"
   echo -e "${NC}"
 }
 
 logo_arch(){
   echo -e "${BOLD}${CYAN}"
-  echo "      /\        /\ "
-  echo "     /  \      /  \ "
-  echo "    / /\ \    / /\ \ "
-  echo "   / /  \ \  / /  \ \ "
-  echo "  / /    \ \/ /    \ \ "
-  echo " / /      \/ /      \ \ "
-  echo "/_/        \/_/       \_\ "
+  echo "     /\\"
+  echo "    /  \\"
+  echo "   / /\\ \\"
+  echo "  / /  \\ \\"
+  echo " /_/    \\_\\"
   echo -e "${NC}"
 }
 
 logo_alpine(){
   echo -e "${BOLD}${BLUE}"
-  echo "      /\  /\  /\ "
-  echo "     /  \/  \/  \ "
-  echo "    /  /\  /\  /\ "
-  echo "   /  /  \/  \/  \ "
-  echo "  /  /  /\  /\  /\ "
-  echo " /__/__/__/__/__/__\ "
+  echo "   /\\  /\\"
+  echo "  /  \\/  \\"
+  echo " /  /\\  /\\"
+  echo "/__/  \\__\\"
   echo -e "${NC}"
 }
 
 logo_suse(){
   echo -e "${BOLD}${GREEN}"
-  echo "   --------"
-  echo "  /  _____ \ "
-  echo " |  /     \ |"
-  echo " | |  o o  | |"
-  echo " |  \_____/  |"
-  echo "  \_________/ "
+  echo "  ______"
+  echo " /  __  \\"
+  echo " | |oo| |"
+  echo " |  \\/  |"
+  echo "  \\____/"
   echo -e "${NC}"
 }
 
 logo_generic(){
   echo -e "${BOLD}${GREEN}"
-  echo "     _____"
-  echo "    /     \\"
-  echo "   |  🦇  |"
-  echo "    \_____/"
+  echo "   _____"
+  echo "  /     \\"
+  echo " |  BAT  |"
+  echo "  \\_____/"
   echo -e "${NC}"
 }
 
