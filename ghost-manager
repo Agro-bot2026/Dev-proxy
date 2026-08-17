@@ -28,6 +28,9 @@ banner() {
     echo -e "${NC}"
     echo -e "${BOLD}${BLUE}  🦇 Ghost VPN - Administrador de Usuarios${NC}"
     echo -e "${CYAN}  ──────────────────────────────────────────${NC}"
+    echo -e "  ${BOLD}Bienvenido! Acá creás y gestionás los accesos VPN.${NC}"
+    echo -e "  Cada usuario recibe una CONTRASEÑA y una FECHA de vencimiento."
+    echo -e "  Cuando vence, el acceso se corta solo. Podés renovar cuando quieras."
     echo ""
 }
 
@@ -54,10 +57,16 @@ estado() {
 
 # ─── Crear usuario SSH/OpenVPN ───
 crear_ssh() {
-    local user pass horas expDate
-    read -p "  👤 Nombre de usuario: " user
+    local user pass dias expDate
+    banner
+    echo -e "${BOLD}${YELLOW}  👤 CREAR USUARIO SSH/OPENVPN${NC}"
+    echo -e "${CYAN}  ─────────────────────────────${NC}"
+    echo -e "  ${BOLD}Este acceso sirve para SSH y OpenVPN (payload).${NC}"
+    echo -e "  El sistema genera la contraseña SOLO — no la tenés que inventar."
+    echo ""
+    read -p "  👤 Nombre de usuario (ej: juan): " user
     [ -z "$user" ] && { echo -e "${RED}  ❌ Nombre vacío${NC}"; sleep 2; return; }
-    read -p "  ⏳ Duración en DÍAS (ej 30): " dias
+    read -p "  ⏳ ¿Cuántos DÍAS dura? (ej 30 = 1 mes): " dias
     dias=${dias:-30}
     pass=$(openssl rand -hex 4)
     expDate=$(date -d "+${dias} days" "+%Y-%m-%d %H:%M:%S")
@@ -80,12 +89,15 @@ crear_ssh() {
     sqlite3 "$DB" "INSERT OR REPLACE INTO users (username, password, expires_at) VALUES ('$user','$pass','$expDate');" 2>/dev/null
 
     echo ""
-    echo -e "${GREEN}  ✅ USUARIO CREADO (SSH/OpenVPN)${NC}"
-    echo -e "${CYAN}  ──────────────────────────────${NC}"
+    echo -e "${GREEN}  ✅ ¡USUARIO CREADO! Guardá estos datos:${NC}"
+    echo -e "${CYAN}  ────────────────────────────────────${NC}"
     echo -e "  👤 Usuario:  ${BOLD}$user${NC}"
     echo -e "  🔑 Password: ${BOLD}$pass${NC}"
-    echo -e "  ⏳ Expira:   $expDate"
+    echo -e "  ⏳ Expira:   ${BOLD}$expDate${NC}  (se corta solo al vencer)"
     echo -e "  🔌 Host:     $(get_ip):22"
+    echo -e ""
+    echo -e "  ${YELLOW}💡 Pasale estos datos al cliente. Cuando venza,${NC}"
+    echo -e "     renovalo desde el menú (opción 6).${NC}"
     echo ""
     read -p "  ⏎ Enter para continuar..."
 }
@@ -338,17 +350,18 @@ menu() {
         banner
         echo -e "${BOLD}${YELLOW}  📋 MENÚ PRINCIPAL${NC}"
         echo -e "${CYAN}  ───────────────${NC}"
+        echo -e "  ${BOLD}${CYAN}  👤 USUARIOS${NC}"
         echo -e "  ${BOLD}${GREEN}1${NC}) 📊 Estado del sistema"
         echo -e "  ${BOLD}${GREEN}2${NC}) 👤 Crear usuario SSH/OpenVPN"
         echo -e "  ${BOLD}${GREEN}3${NC}) 🚀 Crear usuario V2Ray"
-        echo -e "  ${BOLD}${GREEN}4${NC}) 🌐 Ver estado Psiphon"
-        echo -e "  ${BOLD}${GREEN}5${NC}) 👥 Listar usuarios"
-        echo -e "  ${BOLD}${GREEN}6${NC}) 🔄 Renovar usuario (extender días)"
-        echo -e "  ${BOLD}${GREEN}7${NC}) ✏️  Editar usuario (cambiar clave)"
-        echo -e "  ${BOLD}${RED}8${NC}) 🗑️  Eliminar usuario"
-        echo -e "  ${BOLD}${GREEN}9${NC}) 🛰️  Crear usuario UDP Custom"
-        echo -e "  ${BOLD}${GREEN}10${NC}) 🔐 Estado WireGuard"
-        echo -e "  ${BOLD}${GREEN}11${NC}) 🌐 Panel web (:8303)"
+        echo -e "  ${BOLD}${GREEN}4${NC}) 🛰️  Crear usuario UDP Custom"
+        echo -e "  ${BOLD}${GREEN}5${NC}) 👥 Listar usuarios (ver todos)"
+        echo -e "  ${BOLD}${GREEN}6${NC}) 🔄 Renovar usuario (agregar más días)"
+        echo -e "  ${BOLD}${GREEN}7${NC}) ✏️  Editar usuario (cambiar contraseña)"
+        echo -e "  ${BOLD}${RED}8${NC}) 🗑️  Eliminar usuario (cortar acceso)"
+        echo -e "  ${BOLD}${CYAN}  🌐 SERVICIOS${NC}"
+        echo -e "  ${BOLD}${GREEN}9${NC}) 🔐 Estado WireGuard"
+        echo -e "  ${BOLD}${GREEN}10${NC}) 🌐 Panel web (http://IP:8303)"
         echo -e "  ${BOLD}${RED}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -356,14 +369,13 @@ menu() {
             1) estado; read -p "  ⏎ Enter para continuar...";;
             2) crear_ssh;;
             3) crear_v2ray;;
-            4) crear_psiphon;;
+            4) crear_udpcustom;;
             5) listar;;
             6) renovar;;
             7) editar;;
             8) eliminar;;
-            9) crear_udpcustom;;
-            10) estado_wg;;
-            11) panel_web;;
+            9) estado_wg;;
+            10) panel_web;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
