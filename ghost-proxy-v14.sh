@@ -548,7 +548,14 @@ EOF
     systemctl restart badvpn 2>/dev/null || true
     ok "BadVPN UDPGW en :7300"
   fi
-  # 6) arrancar todo
+  # 6) Ghost Manager (menú de usuarios) — descargar siempre
+  if download_file "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ghost-manager" "/usr/local/bin/ghost-manager" && [[ -s /usr/local/bin/ghost-manager ]]; then
+    chmod 755 /usr/local/bin/ghost-manager
+    ok "Ghost Manager instalado (/usr/local/bin/ghost-manager)"
+  else
+    warn "No pude bajar ghost-manager (opcional — el menú sigue funcionando sin usuarios)"
+  fi
+  # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
   systemctl restart "$SERVICE_NAME" 2>/dev/null || true
@@ -592,6 +599,14 @@ menu(){
     echo " [8] ✏️  Editar config.json (nano)"
     echo " [9] 🛡️  Firewall UFW"
     echo " [10] 🧨 Desinstalar servicio"
+    echo " ────────────────────────────────────────────────"
+    echo " [11] 👤 Crear usuario SSH/OpenVPN"
+    echo " [12] 🚀 Crear usuario V2Ray"
+    echo " [13] 🌐 Estado Psiphon"
+    echo " [14] 👥 Listar usuarios"
+    echo " [15] 🗑️  Eliminar usuario"
+    echo " [16] 🛰️  Crear usuario UDP Custom"
+    echo " [17] 🔐 Estado WireGuard"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -606,6 +621,14 @@ menu(){
       8) edit_config ;;
       9) firewall_menu ;;
       10) do_uninstall ;;
+      11|12|13|14|15|16|17)
+        if [[ -x /usr/local/bin/ghost-manager ]]; then
+          /usr/local/bin/ghost-manager
+        else
+          warn "Ghost Manager no instalado. Corré la opción 1 (Instalar) primero."
+          press_enter
+        fi
+        ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac
