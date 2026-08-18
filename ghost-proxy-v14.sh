@@ -149,7 +149,7 @@ detect_services(){
   local ssh_pid
   ssh_pid="$(pgrep -f 'sshd|dropbear' 2>/dev/null | head -1 || true)"
   if [[ -n "$ssh_pid" ]]; then
-    ssh_port="$(echo "$listeners" | grep -E 'sshd|dropbear' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
+    ssh_port="$(echo "$listeners" | grep -E 'sshd|dropbear' | grep -oE ':[0-9]+' | head -1 | tr -d ':')" || true
     [[ -z "$ssh_port" ]] && ssh_port=22
     found_ssh=1
   else
@@ -161,7 +161,7 @@ detect_services(){
   local v2ray_pid
   v2ray_pid="$(pgrep -f 'xray|v2ray' 2>/dev/null | head -1 || true)"
   if [[ -n "$v2ray_pid" ]]; then
-    v2ray_port="$(echo "$listeners" | grep -E 'xray|v2ray' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
+    v2ray_port="$(echo "$listeners" | grep -E 'xray|v2ray' | grep -oE ':[0-9]+' | head -1 | tr -d ':')" || true
     [[ -z "$v2ray_port" ]] && v2ray_port=8443
     found_v2ray=1
   elif echo "$listeners" | grep -qE ':8443\s'; then
@@ -174,7 +174,7 @@ detect_services(){
   local psiphon_pid
   psiphon_pid="$(pgrep -f 'psiphon' 2>/dev/null | head -1 || true)"
   if [[ -n "$psiphon_pid" ]]; then
-    psiphon_port="$(echo "$listeners" | grep -E 'psiphon' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
+    psiphon_port="$(echo "$listeners" | grep -E 'psiphon' | grep -oE ':[0-9]+' | head -1 | tr -d ':')" || true
     [[ -z "$psiphon_port" ]] && psiphon_port=2223
     found_psiphon=1
   elif echo "$listeners" | grep -qE ':2223\s'; then
@@ -187,7 +187,7 @@ detect_services(){
   local ovpn_pid
   ovpn_pid="$(pgrep -f 'openvpn' 2>/dev/null | head -1 || true)"
   if [[ -n "$ovpn_pid" ]]; then
-    ovpn_port="$(echo "$listeners" | grep -E 'openvpn' | grep -oE ':[0-9]+' | head -1 | tr -d ':')"
+    ovpn_port="$(echo "$listeners" | grep -E 'openvpn' | grep -oE ':[0-9]+' | head -1 | tr -d ':')" || true
     [[ -z "$ovpn_port" ]] && ovpn_port=1194
     found_ovpn=1
   elif echo "$listeners" | grep -qE ':1194\s'; then
@@ -354,7 +354,7 @@ EOF
 show_status(){
   # Detectar la distro (simple, sin funciones externas)
   local DISTRO
-  DISTRO="$(grep -E '^ID=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' | head -c 15)"
+  DISTRO="$(grep -E '^ID=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' | head -c 15)" || true
   [[ -z "$DISTRO" ]] && DISTRO="linux"
   echo
   echo "╔══════════════════════════════════════════════╗"
@@ -904,11 +904,11 @@ EOF
   ok "server.conf creado"
 
   # 5) Servicio + IP forwarding + NAT (MASQUERADE para que los clientes naveguen)
-  sed -i 's/^#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf 2>/dev/null
-  echo 1 > /proc/sys/net/ipv4/ip_forward
+  sed -i 's/^#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf 2>/dev/null || true
+  echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null || true
   # NAT: los clientes OpenVPN (10.8.0.0/24) salen a internet con masquerade
   local IFACE_NAT
-  IFACE_NAT="$(ip route 2>/dev/null | grep '^default' | awk '{print $5}' | head -1)"
+  IFACE_NAT="$(ip route 2>/dev/null | grep '^default' | awk '{print $5}' | head -1)" || true
   [[ -z "$IFACE_NAT" ]] && IFACE_NAT="eth0"
   iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -o "$IFACE_NAT" -j MASQUERADE 2>/dev/null || \
     iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o "$IFACE_NAT" -j MASQUERADE 2>/dev/null || true
@@ -943,7 +943,7 @@ install_wireguard(){
     mkdir -p /etc/wireguard
     local PRIV WG_PUB
     PRIV="$(wg genkey 2>/dev/null)"
-    WG_PUB="$(echo "$PRIV" | wg pubkey 2>/dev/null)"
+    WG_PUB="$(echo "$PRIV" | wg pubkey 2>/dev/null)" || true
     cat > /etc/wireguard/wg0.conf <<EOF
 [Interface]
 PrivateKey = ${PRIV}
