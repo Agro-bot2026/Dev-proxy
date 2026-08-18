@@ -496,8 +496,14 @@ EOF
   systemctl disable nginx 2>/dev/null || true
   systemctl stop apache2 2>/dev/null || true
   systemctl disable apache2 2>/dev/null || true
+  # ⚠️ El paquete stunnel4 trae su propio servicio que bindea el 443 con la config:
+  # hay que apagarlo o el stunnel-epro nuevo choca (Address already in use)
+  systemctl stop stunnel4 2>/dev/null || true
+  systemctl disable stunnel4 2>/dev/null || true
   pkill -f 'caddy run' 2>/dev/null || true
   pkill -f '/usr/bin/caddy' 2>/dev/null || true
+  pkill -f stunnel4 2>/dev/null || true
+  pkill -f 'stunnel' 2>/dev/null || true
   # Si el propio proxy bindea el 443 (enable_wss), sacarlo de ahí
   if command -v python3 >/dev/null 2>&1 && grep -q 'enable_wss.*true' "$CONFIG_FILE" 2>/dev/null; then
     warn "El proxy bindea el 443 (enable_wss) — lo apago para que stunnel use el puerto"
