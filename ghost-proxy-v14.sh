@@ -483,6 +483,16 @@ accept = 443
 connect = 127.0.0.1:80
 cert = /etc/stunnel/eprohc.pem
 EOF
+  # 3b) Liberar el 443 si está ocupado por Caddy/nginx/apache (versiones viejas del instalador)
+  local ocupante_443
+  ocupante_443="$(ss -tlnp 2>/dev/null | grep ':443 ' | grep -oE 'users:\\(\\(\"[^\"]+\"' | head -1 | sed 's/users:.(("//' || true)"
+  if [[ -n "$ocupante_443" ]]; then
+    warn "Puerto 443 ocupado por: $ocupante_443 — liberándolo para stunnel"
+    if has_cmd caddy; then systemctl stop caddy 2>/dev/null || true; systemctl disable caddy 2>/dev/null || true; fi
+    if has_cmd nginx; then systemctl stop nginx 2>/dev/null || true; systemctl disable nginx 2>/dev/null || true; fi
+    if has_cmd apache2; then systemctl stop apache2 2>/dev/null || true; systemctl disable apache2 2>/dev/null || true; fi
+    sleep 1
+  fi
   # 4) Servicio
   if has_cmd systemctl; then
     cat > /etc/systemd/system/stunnel-epro.service <<'EOF'
@@ -577,6 +587,12 @@ clean_all(){
   systemctl daemon-reload
   # 2) Archivos del proxy
   rm -rf "$INSTALL_DIR"
+  # 2b) SSL viejo (Caddy de versiones anteriores del instalador) + stunnel
+  systemctl stop caddy 2>/dev/null || true
+  systemctl disable caddy 2>/dev/null || true
+  systemctl stop stunnel-epro 2>/dev/null || true
+  systemctl disable stunnel-epro 2>/dev/null || true
+  rm -f /etc/systemd/system/stunnel-epro.service
   # 3) Ghost Manager
   rm -f /usr/local/bin/ghost-manager
   # 4) Binarios badvpn
