@@ -442,6 +442,47 @@ do_uninstall(){
   press_enter
 }
 
+# ─── Abrir TODOS los puertos del stack en el firewall (ufw/firewalld/iptables) ───
+open_all_ports(){
+  need_root
+  echo ""
+  echo -e "${CYAN}  🔓 Abriendo puertos en el firewall...${NC}"
+  # Puertos del stack: 80 (proxy), 22 (SSH), 2223 (Psiphon), 8443 (Xray),
+  # 1194 (OpenVPN), 51820 (WG), 7300 (BadVPN UDP)
+  local puertos_tcp="80 22 2223 8443 1194 51820"
+  local puertos_udp="80 2223 8443 1194 51820 7300"
+
+  if has_cmd ufw; then
+    # UFW (Debian/Ubuntu)
+    sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw 2>/dev/null || true
+    for p in $puertos_tcp; do ufw allow "${p}/tcp" >/dev/null 2>&1 || true; done
+    for p in $puertos_udp; do ufw allow "${p}/udp" >/dev/null 2>&1 || true; done
+    # Si UFW está inactivo, no forzarlo (puede cortar la SSH del usuario si no tiene el 22)
+    if ufw status 2>/dev/null | grep -q "Status: active"; then
+      ok "UFW: puertos abiertos (TCP+UDP)"
+    else
+      ok "Puertos agregados a UFW (está inactivo — sin riesgo)"
+    fi
+  elif has_cmd firewall-cmd; then
+    # firewalld (Rocky/CentOS/Alma)
+    systemctl is-active --quiet firewalld 2>/dev/null && {
+      for p in $puertos_tcp; do firewall-cmd --permanent --add-port="${p}/tcp" >/dev/null 2>&1 || true; done
+      for p in $puertos_udp; do firewall-cmd --permanent --add-port="${p}/udp" >/dev/null 2>&1 || true; done
+      firewall-cmd --permanent --add-masquerade >/dev/null 2>&1 || true
+      firewall-cmd --reload >/dev/null 2>&1 || true
+      ok "firewalld: puertos abiertos (TCP+UDP) + masquerade"
+    } || ok "firewalld inactivo (no hizo falta)"
+  elif has_cmd iptables; then
+    # iptables puro (sin firewall manager)
+    for p in $puertos_tcp; do iptables -C INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null || true; done
+    for p in $puertos_udp; do iptables -C INPUT -p udp --dport "$p" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$p" -j ACCEPT 2>/dev/null || true; done
+    ok "iptables: puertos abiertos (TCP+UDP)"
+  else
+    warn "Sin firewall detectado (ufw/firewalld/iptables) — puertos ya están abiertos"
+  fi
+  echo ""
+}
+
 # ─── LIMPIEZA TOTAL (borra TODO lo anterior antes de instalar) ───
 clean_all(){
   need_root
@@ -1184,6 +1225,8 @@ EOF
     fi
   fi
   echo
+  # 9) Abrir TODOS los puertos del stack en el firewall (ufw/firewalld/iptables)
+  open_all_ports
   echo "══════════════════════════════════════════════"
   echo " 🦇 INSTALACIÓN COMPLETADA"
   echo "══════════════════════════════════════════════"
