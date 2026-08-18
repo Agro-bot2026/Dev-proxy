@@ -1169,12 +1169,59 @@ EOF
   echo
 }
 
+# ─── Actualización automática ───
+SCRIPT_URL="https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ghost-proxy-v14.sh"
+SCRIPT_LOCAL="${BASH_SOURCE[0]}"
+
+check_update(){
+  # Compara la versión local con la de GitHub (sin tocar nada)
+  local remota
+  remota="$(curl -s --max-time 8 "$SCRIPT_URL" 2>/dev/null | grep -m1 '^VERSION=' | cut -d'"' -f2)"
+  if [[ -z "$remota" ]]; then
+    return 1  # sin conexión / no se pudo verificar
+  fi
+  if [[ "$remota" != "$VERSION" ]]; then
+    echo
+    echo -e "${YELLOW}  ⚠️  ¡Hay una versión nueva disponible!${NC}"
+    echo -e "  ${YELLOW}     Local: ${BOLD}$VERSION${NC}${YELLOW}  →  Remota: ${BOLD}${GREEN}$remota${NC}"
+    echo
+    return 0  # hay update
+  fi
+  return 1
+}
+
+do_update(){
+  need_root
+  echo
+  echo -e "${BOLD}${CYAN}  🔄 ACTUALIZANDO GHOST PROXY...${NC}"
+  local tmp="/tmp/ghost-proxy-update.sh"
+  if download_file "$SCRIPT_URL" "$tmp" && [[ -s "$tmp" ]] && bash -n "$tmp" 2>/dev/null; then
+    cp "$tmp" "$SCRIPT_LOCAL"
+    chmod 755 "$SCRIPT_LOCAL"
+    ok "¡Actualizado! (versión nueva instalada)"
+    echo -e "  ${YELLOW}💡 Reiniciá el script para usar la versión nueva:${NC}"
+    echo -e "     ${BOLD}bash $SCRIPT_LOCAL${NC}"
+    echo
+    read -p "  ⏎ Enter para continuar..."
+    # Ejecutar la versión nueva directamente
+    exec bash "$SCRIPT_LOCAL" 2>/dev/null || true
+  else
+    warn "No pude descargar/verificar la actualización"
+    press_enter
+  fi
+}
+
 # ─── Menú principal ───
 menu(){
   need_root
   while true; do
     banner
     show_status
+    # Aviso de actualización (solo si hay versión nueva)
+    if check_update; then
+      echo -e "  ${YELLOW}⚠️  Actualización disponible (${BOLD}${GREEN}ver más arriba${NC}${YELLOW})${NC}"
+      echo
+    fi
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " [1] 🛠️  Instalar / Actualizar proxy"
     echo " [2] 🔓 Liberar puertos 80/443"
@@ -1200,6 +1247,8 @@ menu(){
     echo " [21] 🛡️  Instalar OpenVPN (si no está)"
     echo " [22] 🔐 Instalar WireGuard (si no está)"
     echo " [23] 🛰️  Instalar UDP Custom (si no está)"
+    echo " ────────────────────────────────────────────────"
+    echo " [24] 🔄 ACTUALIZAR Ghost Proxy (si hay versión nueva)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -1228,6 +1277,7 @@ menu(){
       21) install_openvpn; press_enter ;;
       22) install_wireguard; press_enter ;;
       23) install_udpcustom; press_enter ;;
+      24) do_update ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac
