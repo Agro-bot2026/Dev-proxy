@@ -6,6 +6,22 @@ Instalador automático tipo ADMRufu con **menú completo para novatos**:
 
 ![Menú del script](menu-ghost-proxy-v3.png)
 
+## 🎨 Banner del Ghost Manager (estilo confirmado)
+
+El banner del `ghost-manager` usa la fuente **`ansi_shadow`** de pyfiglet (bloques con sombra y esquinas `╗╔╝║═`, efecto 3D) con el texto **EPRO.HC** en naranja:
+
+```bash
+# Generarlo con:
+#   /usr/bin/python3 -m pip install pyfiglet --break-system-packages
+python3 -c "import pyfiglet; print(pyfiglet.figlet_format('EPRO.HC', font='ansi_shadow'))"
+```
+
+- **Fuente**: `ansi_shadow` (la misma que usaba el banner "GHOST" original)
+- **Color**: `ORANGE='\033[38;5;208m'` (naranja intenso)
+- **Texto**: `EPRO.HC` todo en mayúsculas (con la E bien formada, no confundir con G)
+- **Menú de opciones**: números en fucsia `FUCSIA='\033[1;35m'`
+- **Subtítulo**: `🦇 Ghost VPN - Administrador de Usuarios` en azul/cian
+
 ## 🚀 Instalación (una línea — instala TODO solo)
 
 ```bash
