@@ -1045,7 +1045,15 @@ auto_install(){
   echo -e "  ${GREEN}+${NC} Rocky / Alma / CentOS ${BOLD}9${NC}  (dnf + EPEL auto)"
   echo -e "  ${GREEN}+${NC} Fedora | Arch | Alpine | openSUSE"
   echo ""
-  # 0) dependencias primero
+  # 0) Actualizar el sistema (apt update + upgrade, como todos los scripts)
+  if has_cmd apt-get; then
+    echo -e "${CYAN}  🔄 Actualizando el sistema (apt update + upgrade)...${NC}"
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq >/dev/null 2>&1 || true
+    apt-get upgrade -y -qq >/dev/null 2>&1 || apt-get upgrade -y >/dev/null 2>&1 || true
+    ok "Sistema actualizado"
+  fi
+  # 0b) dependencias primero
   ensure_deps_auto
   # 1) proxy.py
   download_proxy
