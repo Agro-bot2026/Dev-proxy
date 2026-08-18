@@ -1249,14 +1249,8 @@ menu(){
     echo " [15] 🗑️  Eliminar usuario"
     echo " [16] 🛰️  Crear usuario UDP Custom"
     echo " [17] 🔐 Estado WireGuard"
-    echo " [18] 🔴 Instalar Psiphon server (si no está)"
-    echo " [19] 🚀 Instalar Xray V2Ray (si no está)"
-    echo " [20] 🌐 Configurar dominio del VPS (para links)"
-    echo " [21] 🛡️  Instalar OpenVPN (si no está)"
-    echo " [22] 🔐 Instalar WireGuard (si no está)"
-    echo " [23] 🛰️  Instalar UDP Custom (si no está)"
     echo " ────────────────────────────────────────────────"
-    echo " [24] 🔄 ACTUALIZAR Ghost Proxy (si hay versión nueva)"
+    echo " [18] 🔄 ACTUALIZAR Ghost Proxy (si hay versión nueva)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -1279,13 +1273,7 @@ menu(){
           press_enter
         fi
         ;;
-      18) install_psiphon; press_enter ;;
-      19) install_xray; press_enter ;;
-      20) set_domain ;;
-      21) install_openvpn; press_enter ;;
-      22) install_wireguard; press_enter ;;
-      23) install_udpcustom; press_enter ;;
-      24) do_update ;;
+      18) do_update ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac
