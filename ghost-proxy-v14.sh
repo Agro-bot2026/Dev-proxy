@@ -1163,6 +1163,25 @@ EOF
     else
       warn "Sin dominio — se usará la IP pública para los links"
     fi
+  else
+    # Ya existe: mostrar el actual y ofrecer cambiarlo
+    local actual_dom
+    actual_dom="$(cat "$DOMAIN_FILE" 2>/dev/null || echo '')"
+    echo ""
+    echo -e "  ${CYAN}🌐 Dominio actual: ${BOLD}${GREEN}${actual_dom:-IP del VPS}${NC}"
+    if [[ -t 0 ]]; then
+      read -r -p "  ¿Cambiarlo? (s/N): " cambia
+    else
+      read -r -t 5 -p "  ¿Cambiarlo? (s/N): " cambia || cambia="n"
+    fi
+    if [[ "$cambia" == "s" || "$cambia" == "S" ]]; then
+      read -r -p "  🌐 Nuevo dominio: " dom2
+      if [[ -n "$dom2" ]]; then
+        dom2="$(echo "$dom2" | tr -d ' ' | sed 's|https\?://||')"
+        echo "$dom2" > "$DOMAIN_FILE"
+        ok "Dominio actualizado: $dom2"
+      fi
+    fi
   fi
   echo
   echo "══════════════════════════════════════════════"
