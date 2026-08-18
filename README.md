@@ -36,16 +36,66 @@ wget -qO- https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ghost-pr
 
 **El script instala todo automáticamente, sin tocar nada a mano:**
 
-1. ✅ Dependencias (curl, python3, systemd — Debian/Ubuntu/Rocky/Alma/CentOS/Alpine/openSUSE/Arch)
-2. ✅ Detecta los servicios del VPS (SSH/V2Ray/Psiphon/OpenVPN/WireGuard)
-3. ✅ Proxy multi-protocolo en :80
-4. ✅ **Psiphon** (:2223 — banner SSH-2.0-Psiphon + IP pública configurados)
-5. ✅ **Xray V2Ray** (:8443 — con xray_uuid.sh para usuarios)
-6. ✅ **OpenVPN** (:1194 — certificados + NAT MASQUERADE + forwarding, los clientes navegan)
-7. ✅ **WireGuard** (:51820)
-8. ✅ BadVPN UDPGW (:7300)
-9. ✅ Ghost Manager (menú de usuarios)
-10. ✅ Te pide el **dominio** del VPS (para los links de usuarios)
+1. ✅ `apt update + upgrade` del sistema (como todos los scripts)
+2. ✅ Dependencias (curl, python3, systemd — Debian/Ubuntu/Rocky/Alma/CentOS/Alpine/openSUSE/Arch)
+3. ✅ Detecta los servicios del VPS (SSH/V2Ray/Psiphon/OpenVPN/WireGuard)
+4. ✅ Proxy multi-protocolo en :80
+5. ✅ **Psiphon** (:2223 — banner SSH-2.0-Psiphon + IP pública configurados)
+6. ✅ **Xray V2Ray** (:8443 — con xray_uuid.sh para usuarios)
+7. ✅ **OpenVPN** (:1194 — certificados + NAT MASQUERADE + forwarding, los clientes navegan)
+8. ✅ **WireGuard** (:51820)
+9. ✅ BadVPN UDPGW (:7300)
+10. ✅ Ghost Manager (menú de usuarios)
+11. ✅ Te pide el **dominio** del VPS (para los links de usuarios)
+12. ✅ **Abre TODOS los puertos en el firewall** (UFW/firewalld/iptables)
+13. ✅ **SSL 443 → proxy WS** (método TLS, stunnel — opcional)
+
+## 🔥 Puertos que abre en el firewall (automático)
+
+| Protocolo | TCP | UDP |
+|-----------|:---:|:---:|
+| Proxy WS | 80 | 80 |
+| SSH | 22 | — |
+| Psiphon | 2223 | 2223 |
+| Xray V2Ray | 8443 | 8443 |
+| OpenVPN | 1194 | 1194 |
+| WireGuard | 51820 | 51820 |
+| BadVPN | — | 7300 |
+| SSL TLS | 443 | — |
+
+Detecta el firewall solo: **UFW** (Debian/Ubuntu), **firewalld** (Rocky/CentOS/Alma), **iptables** (cualquiera). Si UFW está inactivo, no lo fuerza (no corta tu SSH).
+
+## 🔒 SSL 443 → proxy WebSocket (método TLS, sin Caddy)
+
+Igual que en producción (donde CloudRun termina el TLS y reenvía desempaquetado al :80), el instalador puede poner **stunnel**: termina TLS en :443 y reenvía al proxy WS :80.
+
+```
+Cliente (HTTP Custom, método TLS)
+   ↓ TLS 443
+stunnel (cert autofirmado para tu dominio)
+   ↓ desempaquetado
+Proxy WS :80 → rutea a OpenVPN/SSH/etc.
+```
+
+Al instalar te pregunta `🌐 ¿Instalar SSL 443 → proxy (método TLS)? [s/N]`, o en el menú con la opción **18** (`🔒 Instalar SSL 443 → proxy`).
+
+**Detalles técnicos** (ya resueltos en el script):
+- `foreground = yes` va GLOBAL (al inicio del conf), no dentro del servicio — si no, stunnel daemoniza y systemd lo reinicia en loop
+- Libera el 443 si lo ocupa Caddy/nginx/stunnel4 del paquete antes de arrancar
+- Certificado autofirmado en `/etc/stunnel/eprohc.pem` (el .hc usa `allow_insecure: true`)
+- Servicio: `stunnel-epro` (systemd, autoarranque)
+
+## 🔄 Actualización del script (auto-update)
+
+El instalador tiene **sistema de actualización integrado**:
+
+- **Aviso automático**: al entrar al menú, compara su versión con la de GitHub y avisa si hay una nueva
+- **Opción 19**: `🔄 ACTUALIZAR Ghost Proxy` — descarga, verifica, reemplaza y ejecuta la versión nueva
+
+```bash
+# Ver la versión actual
+grep '^VERSION=' ghost-proxy-v14.sh
+```
 
 ## 🧹 Instalación limpia (borra todo lo anterior)
 
@@ -88,6 +138,31 @@ ghost-manager
   11) 🔐 Estado WireGuard
   12) 🌐 Panel web (http://IP:8303)
   0) Salir
+```
+
+**Menú del instalador** (además del ghost-manager):
+
+```
+ [1] 🛠️  Instalar / Actualizar proxy
+ [2] 🔓 Liberar puertos 80/443
+ [3] 🟣 BadVPN UDPGW (UDP Custom)
+ [4] ⛔  Detener servicio
+ [5] ▶️  Reanudar servicio
+ [6] 🔄 Reiniciar servicio
+ [7] 📜 Ver logs
+ [8] ✏️  Editar config.json (nano)
+ [9] 🛡️  Firewall UFW
+ [10] 🧨 Desinstalar servicio
+ [11] 👤 Crear usuario SSH/OpenVPN
+ [12] 🚀 Crear usuario V2Ray
+ [13] 🌐 Estado Psiphon
+ [14] 👥 Listar usuarios
+ [15] 🗑️  Eliminar usuario
+ [16] 🛰️  Crear usuario UDP Custom
+ [17] 🔐 Estado WireGuard
+ [18] 🔒 Instalar SSL 443 → proxy (método TLS)
+ [19] 🔄 ACTUALIZAR Ghost Proxy (si hay versión nueva)
+ [0] Salir
 ```
 
 **Al crear un usuario OpenVPN** te genera todo armado: payload, proxy remoto, .ovpn con la CA, y un enlace para descargar el archivo (`http://dominio/ovpn/usuario.ovpn`).
