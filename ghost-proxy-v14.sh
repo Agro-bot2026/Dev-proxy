@@ -352,21 +352,29 @@ EOF
 
 # ─── Estado ───
 show_status(){
+  # Detectar la distro (simple, sin funciones externas)
+  local DISTRO
+  DISTRO="$(grep -E '^ID=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' | head -c 15)"
+  [[ -z "$DISTRO" ]] && DISTRO="linux"
   echo
   echo "╔══════════════════════════════════════════════╗"
-  echo "║  📊 ESTADO — Sistema: $(detect_system)          ║"
+  echo "║  📊 ESTADO — Sistema: ${DISTRO}          ║"
   echo "╚══════════════════════════════════════════════╝"
   local st
   st="$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || echo inactive)"
   echo -e "  Proxy ${SERVICE_NAME}: ${GREEN}${st}${NC}"
-  if [[ "$st" == "active" ]]; then
-    ss -tlnp 2>/dev/null | grep -E ":80 |:443 " | head -2 || true
-  fi
   st="$(systemctl is-active badvpn 2>/dev/null || echo inactive)"
   echo -e "  BadVPN: ${GREEN}${st}${NC}"
+  st="$(systemctl is-active psiphon 2>/dev/null || echo inactive)"
+  echo -e "  Psiphon: ${GREEN}${st}${NC}"
+  st="$(systemctl is-active xray 2>/dev/null || echo inactive)"
+  echo -e "  Xray V2Ray: ${GREEN}${st}${NC}"
+  st="$(systemctl is-active openvpn@server 2>/dev/null || echo inactive)"
+  echo -e "  OpenVPN: ${GREEN}${st}${NC}"
+  st="$(systemctl is-active wg-quick@wg0 2>/dev/null || echo inactive)"
+  echo -e "  WireGuard: ${GREEN}${st}${NC}"
   if [[ -f "$CONFIG_FILE" ]]; then
     echo "  Config: $CONFIG_FILE"
-    grep -E "target_port|ovpn_port|v2ray_port|psiphon_port|wg_port" "$CONFIG_FILE" | tr -d ' ",'
   fi
   echo
 }
