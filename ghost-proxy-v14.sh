@@ -442,9 +442,10 @@ do_uninstall(){
   press_enter
 }
 
-# ─── SSL 443 → proxy WebSocket (método TLS tipo CloudRun) ───
-# Caddy termina TLS en :443 y reenvía al proxy WS :80 (el pymanager).
-# Así el tráfico TLS 443 llega al proxy igual que con CloudRun.
+# ─── SSL 443 → proxy WebSocket (método TLS, igual que en este VPS) ───
+# En producción el TLS 443 lo termina CloudRun y reenvía DESEMPAQUETADO al :80
+# del proxy. En un VPS propio el equivalente es stunnel: termina TLS en :443
+# y reenvía al proxy WS :80 (el pymanager). Sin Caddy.
 install_tls_443(){
   need_root
   local dom
@@ -455,43 +456,69 @@ install_tls_443(){
     return 1
   fi
   echo ""
-  echo -e "${CYAN}  🔒 Instalando SSL 443 → proxy WebSocket (método TLS)...${NC}"
-  # Caddy (o apt caddy si no existe el binario oficial)
-  if ! has_cmd caddy; then
-    apt-get install -y -qq caddy >/dev/null 2>&1 || true
+  echo -e "${CYAN}  🔒 Instalando SSL 443 → proxy WebSocket (método TLS, stunnel)...${NC}"
+  # 1) stunnel
+  if ! has_cmd stunnel4 && ! has_cmd stunnel; then
+    apt-get install -y -qq stunnel4 >/dev/null 2>&1 || true
   fi
-  if ! has_cmd caddy; then
-    warn "Caddy no disponible en apt — probando binario oficial..."
-    curl -sL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /usr/local/bin/caddy 2>/dev/null || true
-    chmod +x /usr/local/bin/caddy 2>/dev/null || true
-  fi
-  if ! has_cmd caddy; then
-    warn "No pude instalar Caddy — el SSL 443 queda pendiente (podés instalarlo a mano)"
+  local STUNNEL_BIN
+  STUNNEL_BIN="$(command -v stunnel4 2>/dev/null || command -v stunnel 2>/dev/null || echo '')"
+  if [[ -z "$STUNNEL_BIN" ]]; then
+    warn "No pude instalar stunnel — el SSL 443 queda pendiente (podés instalarlo a mano)"
     return 1
   fi
-  # Caddyfile: http_port 8080 (deja el :80 libre para el proxy) + dominio → localhost:80
-  mkdir -p /etc/caddy
-  cat > /etc/caddy/Caddyfile <<EOF
-{
-    # El puerto 80 queda LIBRE para el proxy WebSocket (pymanager)
-    http_port 8080
-}
-
-${dom} {
-    reverse_proxy localhost:80
-}
-EOF
-  systemctl enable caddy >/dev/null 2>&1 || true
-  systemctl restart caddy 2>/dev/null || true
-  sleep 3
-  if systemctl is-active --quiet caddy; then
-    ok "SSL 443 ACTIVO — ${dom}:443 → proxy WS :80 (método TLS)"
-    # Abrir 443 en el firewall
-    if has_cmd ufw; then ufw allow 443/tcp >/dev/null 2>&1 || true; fi
-    if has_cmd firewall-cmd; then firewall-cmd --permanent --add-port=443/tcp >/dev/null 2>&1 || true; firewall-cmd --reload >/dev/null 2>&1 || true; fi
-  else
-    warn "Caddy no arrancó — mirá: journalctl -u caddy -n 20"
+  # 2) Certificado autofirmado para el dominio (método TLS usa allow_insecure)
+  mkdir -p /etc/stunnel
+  if [[ ! -f /etc/stunnel/eprohc.pem ]]; then
+    openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+      -keyout /etc/stunnel/eprohc.pem -out /etc/stunnel/eprohc.pem \
+      -subj "/CN=${dom}" >/dev/null 2>&1 || true
+    chmod 600 /etc/stunnel/eprohc.pem
+    ok "Certificado SSL creado para ${dom}"
   fi
+  # 3) Config: 443 → 127.0.0.1:80 (el proxy WS)
+  cat > /etc/stunnel/stunnel.conf <<EOF
+[eprohc-tls]
+accept = 443
+connect = 127.0.0.1:80
+cert = /etc/stunnel/eprohc.pem
+EOF
+  # 4) Servicio
+  if has_cmd systemctl; then
+    cat > /etc/systemd/system/stunnel-epro.service <<'EOF'
+[Unit]
+Description=SSL 443 → proxy WebSocket (método TLS)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/stunnel4 /etc/stunnel/stunnel.conf
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    # stunnel4 es /usr/bin/stunnel4 en Debian/Ubuntu; ajustar si es otro path
+    sed -i "s|/usr/bin/stunnel4|$(command -v stunnel4 2>/dev/null || echo /usr/bin/stunnel4)|" /etc/systemd/system/stunnel-epro.service
+    systemctl daemon-reload
+    systemctl enable stunnel-epro >/dev/null 2>&1 || true
+    systemctl restart stunnel-epro 2>/dev/null || true
+    sleep 2
+    if systemctl is-active --quiet stunnel-epro; then
+      ok "SSL 443 ACTIVO — ${dom}:443 → proxy WS :80 (método TLS)"
+    else
+      warn "stunnel no arrancó — mirá: journalctl -u stunnel-epro -n 20"
+    fi
+  else
+    # Sin systemd: correr en background
+    pkill -f "stunnel.*eprohc" 2>/dev/null || true
+    "$STUNNEL_BIN" /etc/stunnel/stunnel.conf 2>/dev/null &
+    ok "SSL 443 ACTIVO — ${dom}:443 → proxy WS :80 (método TLS)"
+  fi
+  # 5) Abrir 443 en el firewall
+  if has_cmd ufw; then ufw allow 443/tcp >/dev/null 2>&1 || true; fi
+  if has_cmd firewall-cmd; then firewall-cmd --permanent --add-port=443/tcp >/dev/null 2>&1 || true; firewall-cmd --reload >/dev/null 2>&1 || true; fi
   echo ""
 }
 
