@@ -477,11 +477,14 @@ install_tls_443(){
     ok "Certificado SSL creado para ${dom}"
   fi
   # 3) Config: 443 → 127.0.0.1:80 (el proxy WS) — bind IPv4 explícito (0.0.0.0)
+  #    foreground=yes es OBLIGATORIO bajo systemd Type=simple (si no, daemoniza
+  #    y systemd lo ve 'terminado' → reinicia en loop infinito)
   cat > /etc/stunnel/stunnel.conf <<EOF
 [eprohc-tls]
 accept = 0.0.0.0:443
 connect = 127.0.0.1:80
 cert = /etc/stunnel/eprohc.pem
+foreground = yes
 EOF
   # 3b) Liberar el 443 pase lo que pase: matar cualquier proceso que lo ocupe
   local ocupante_443
