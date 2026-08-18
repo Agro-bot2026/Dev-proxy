@@ -1144,15 +1144,24 @@ EOF
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
   systemctl restart "$SERVICE_NAME" 2>/dev/null || true
   sleep 2
-  # 8) Pedir el dominio (solo si no está guardado y hay tty)
-  if [[ ! -f "$DOMAIN_FILE" && -t 0 ]]; then
+  # 8) Pedir el dominio (si no está guardado — pregunta siempre, con timeout si no hay tty)
+  if [[ ! -f "$DOMAIN_FILE" ]]; then
     echo ""
-    read -r -p "  🌐 ¿Dominio enlazado a este VPS? (ej: pinche.chauinforme.online) [Enter = IP]: " dom
+    if [[ -t 0 ]]; then
+      read -r -p "  🌐 ¿Dominio enlazado a este VPS? (ej: pinche.chauinforme.online) [Enter = IP]: " dom
+    else
+      # Sin tty (pipelines, cron): esperar 8s por si hay entrada, si no usar IP
+      echo -e "  ${YELLOW}🌐 ¿Dominio enlazado a este VPS? (ej: pinche.chauinforme.online)${NC}"
+      echo -e "  ${YELLOW}   [Enter = usar IP pública]${NC}"
+      read -r -t 8 -p "  🌐 Dominio: " dom || true
+    fi
     if [[ -n "$dom" ]]; then
       dom="$(echo "$dom" | tr -d ' ' | sed 's|https\?://||')"
       mkdir -p "$INSTALL_DIR"
       echo "$dom" > "$DOMAIN_FILE"
       ok "Dominio guardado: $dom"
+    else
+      warn "Sin dominio — se usará la IP pública para los links"
     fi
   fi
   echo
