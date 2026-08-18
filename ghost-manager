@@ -5,7 +5,7 @@
 # ────────────────────────────────────────────────────────────
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+MAGENTA='\033[0;35m'; FUCSIA='\033[1;35m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 DB="/etc/ctmanager/config/ssh_users.db"
 VDB="/etc/ctmanager/config/v2ray_users.db"
@@ -514,20 +514,20 @@ menu() {
         echo -e "${BOLD}${YELLOW}  📋 MENÚ PRINCIPAL${NC}"
         echo -e "${CYAN}  ───────────────${NC}"
         echo -e "  ${BOLD}${CYAN}  👤 USUARIOS${NC}"
-        echo -e "  ${BOLD}${GREEN}1${NC}) 📊 Estado del sistema"
-        echo -e "  ${BOLD}${GREEN}2${NC}) 👤 Crear usuario SSH"
-        echo -e "  ${BOLD}${GREEN}3${NC}) 🛡️  Crear usuario OpenVPN (config armado)"
-        echo -e "  ${BOLD}${GREEN}4${NC}) 🚀 Crear usuario V2Ray"
-        echo -e "  ${BOLD}${GREEN}5${NC}) 🛰️  Crear usuario UDP Custom"
-        echo -e "  ${BOLD}${GREEN}6${NC}) 👥 Listar usuarios (ver todos)"
-        echo -e "  ${BOLD}${GREEN}7${NC}) 🔄 Renovar usuario (agregar más días)"
-        echo -e "  ${BOLD}${GREEN}8${NC}) ✏️  Editar usuario (cambiar contraseña)"
-        echo -e "  ${BOLD}${RED}9${NC}) 🗑️  Eliminar usuario (cortar acceso)"
+        echo -e "  ${BOLD}${FUCSIA}1${NC}) 📊 Estado del sistema"
+        echo -e "  ${BOLD}${FUCSIA}2${NC}) 👤 Crear usuario SSH"
+        echo -e "  ${BOLD}${FUCSIA}3${NC}) 🛡️  Crear usuario OpenVPN (config armado)"
+        echo -e "  ${BOLD}${FUCSIA}4${NC}) 🚀 Crear usuario V2Ray"
+        echo -e "  ${BOLD}${FUCSIA}5${NC}) 🛰️  Crear usuario UDP Custom"
+        echo -e "  ${BOLD}${FUCSIA}6${NC}) 👥 Listar usuarios (ver todos)"
+        echo -e "  ${BOLD}${FUCSIA}7${NC}) 🔄 Renovar usuario (agregar más días)"
+        echo -e "  ${BOLD}${FUCSIA}8${NC}) ✏️  Editar usuario (cambiar contraseña)"
+        echo -e "  ${BOLD}${FUCSIA}9${NC}) 🗑️  Eliminar usuario (cortar acceso)"
         echo -e "  ${BOLD}${CYAN}  🌐 SERVICIOS${NC}"
-        echo -e "  ${BOLD}${GREEN}10${NC}) 🌐 Estado Psiphon (server entry)"
-        echo -e "  ${BOLD}${GREEN}11${NC}) 🔐 Estado WireGuard"
-        echo -e "  ${BOLD}${GREEN}12${NC}) 🌐 Panel web (http://IP:8303)"
-        echo -e "  ${BOLD}${RED}0${NC}) Salir"
+        echo -e "  ${BOLD}${FUCSIA}10${NC}) 🌐 Estado Psiphon (server entry)"
+        echo -e "  ${BOLD}${FUCSIA}11${NC}) 🔐 Estado WireGuard"
+        echo -e "  ${BOLD}${FUCSIA}12${NC}) 🌐 Panel web (http://IP:8303)"
+        echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
         case "$op" in
