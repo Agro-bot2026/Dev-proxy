@@ -485,7 +485,7 @@ cert = /etc/stunnel/eprohc.pem
 EOF
   # 3b) Liberar el 443 si está ocupado por Caddy/nginx/apache (versiones viejas del instalador)
   local ocupante_443
-  ocupante_443="$(ss -tlnp 2>/dev/null | grep ':443 ' | grep -oE 'users:\\(\\(\"[^\"]+\"' | head -1 | sed 's/users:.(("//' || true)"
+  ocupante_443="$(ss -tlnp 2>/dev/null | grep ':443 ' | sed -E 's/.*users:\(\(\"([^\"]+)\".*/\1/' | head -1 || true)"
   if [[ -n "$ocupante_443" ]]; then
     warn "Puerto 443 ocupado por: $ocupante_443 — liberándolo para stunnel"
     if has_cmd caddy; then systemctl stop caddy 2>/dev/null || true; systemctl disable caddy 2>/dev/null || true; fi
