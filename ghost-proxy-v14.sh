@@ -442,6 +442,59 @@ do_uninstall(){
   press_enter
 }
 
+# ─── SSL 443 → proxy WebSocket (método TLS tipo CloudRun) ───
+# Caddy termina TLS en :443 y reenvía al proxy WS :80 (el pymanager).
+# Así el tráfico TLS 443 llega al proxy igual que con CloudRun.
+install_tls_443(){
+  need_root
+  local dom
+  dom="$(cat "$DOMAIN_FILE" 2>/dev/null | tr -d ' ' || true)"
+  if [[ -z "$dom" ]]; then
+    warn "Sin dominio guardado — el SSL 443 necesita un dominio (no IP)"
+    warn "Guardalo con: echo 'tu.dominio.com' > $DOMAIN_FILE"
+    return 1
+  fi
+  echo ""
+  echo -e "${CYAN}  🔒 Instalando SSL 443 → proxy WebSocket (método TLS)...${NC}"
+  # Caddy (o apt caddy si no existe el binario oficial)
+  if ! has_cmd caddy; then
+    apt-get install -y -qq caddy >/dev/null 2>&1 || true
+  fi
+  if ! has_cmd caddy; then
+    warn "Caddy no disponible en apt — probando binario oficial..."
+    curl -sL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /usr/local/bin/caddy 2>/dev/null || true
+    chmod +x /usr/local/bin/caddy 2>/dev/null || true
+  fi
+  if ! has_cmd caddy; then
+    warn "No pude instalar Caddy — el SSL 443 queda pendiente (podés instalarlo a mano)"
+    return 1
+  fi
+  # Caddyfile: http_port 8080 (deja el :80 libre para el proxy) + dominio → localhost:80
+  mkdir -p /etc/caddy
+  cat > /etc/caddy/Caddyfile <<EOF
+{
+    # El puerto 80 queda LIBRE para el proxy WebSocket (pymanager)
+    http_port 8080
+}
+
+${dom} {
+    reverse_proxy localhost:80
+}
+EOF
+  systemctl enable caddy >/dev/null 2>&1 || true
+  systemctl restart caddy 2>/dev/null || true
+  sleep 3
+  if systemctl is-active --quiet caddy; then
+    ok "SSL 443 ACTIVO — ${dom}:443 → proxy WS :80 (método TLS)"
+    # Abrir 443 en el firewall
+    if has_cmd ufw; then ufw allow 443/tcp >/dev/null 2>&1 || true; fi
+    if has_cmd firewall-cmd; then firewall-cmd --permanent --add-port=443/tcp >/dev/null 2>&1 || true; firewall-cmd --reload >/dev/null 2>&1 || true; fi
+  else
+    warn "Caddy no arrancó — mirá: journalctl -u caddy -n 20"
+  fi
+  echo ""
+}
+
 # ─── Abrir TODOS los puertos del stack en el firewall (ufw/firewalld/iptables) ───
 open_all_ports(){
   need_root
@@ -1227,6 +1280,18 @@ EOF
   echo
   # 9) Abrir TODOS los puertos del stack en el firewall (ufw/firewalld/iptables)
   open_all_ports
+  # 10) SSL 443 → proxy WS (método TLS tipo CloudRun) — si hay dominio
+  if [[ -f "$DOMAIN_FILE" ]]; then
+    echo -e "  ${CYAN}🌐 ¿Instalar SSL 443 → proxy (método TLS)? [s/N]${NC}"
+    if [[ -t 0 ]]; then
+      read -r -p "  → " q_tls
+    else
+      read -r -t 5 -p "  → " q_tls || q_tls="n"
+    fi
+    if [[ "$q_tls" == "s" || "$q_tls" == "S" ]]; then
+      install_tls_443
+    fi
+  fi
   echo "══════════════════════════════════════════════"
   echo " 🦇 INSTALACIÓN COMPLETADA"
   echo "══════════════════════════════════════════════"
@@ -1329,7 +1394,8 @@ menu(){
     echo " [16] 🛰️  Crear usuario UDP Custom"
     echo " [17] 🔐 Estado WireGuard"
     echo " ────────────────────────────────────────────────"
-    echo " [18] 🔄 ACTUALIZAR Ghost Proxy (si hay versión nueva)"
+    echo " [18] 🔒 Instalar SSL 443 → proxy (método TLS)"
+    echo " [19] 🔄 ACTUALIZAR Ghost Proxy (si hay versión nueva)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -1352,7 +1418,8 @@ menu(){
           press_enter
         fi
         ;;
-      18) do_update ;;
+      18) install_tls_443; press_enter ;;
+      19) do_update ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac
