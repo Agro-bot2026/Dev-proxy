@@ -476,23 +476,35 @@ install_tls_443(){
     chmod 600 /etc/stunnel/eprohc.pem
     ok "Certificado SSL creado para ${dom}"
   fi
-  # 3) Config: 443 → 127.0.0.1:80 (el proxy WS)
+  # 3) Config: 443 → 127.0.0.1:80 (el proxy WS) — bind IPv4 explícito (0.0.0.0)
   cat > /etc/stunnel/stunnel.conf <<EOF
 [eprohc-tls]
-accept = 443
+accept = 0.0.0.0:443
 connect = 127.0.0.1:80
 cert = /etc/stunnel/eprohc.pem
 EOF
-  # 3b) Liberar el 443 si está ocupado por Caddy/nginx/apache (versiones viejas del instalador)
+  # 3b) Liberar el 443 pase lo que pase: matar cualquier proceso que lo ocupe
   local ocupante_443
   ocupante_443="$(ss -tlnp 2>/dev/null | grep ':443 ' | sed -E 's/.*users:\(\(\"([^\"]+)\".*/\1/' | head -1 || true)"
   if [[ -n "$ocupante_443" ]]; then
     warn "Puerto 443 ocupado por: $ocupante_443 — liberándolo para stunnel"
-    if has_cmd caddy; then systemctl stop caddy 2>/dev/null || true; systemctl disable caddy 2>/dev/null || true; fi
-    if has_cmd nginx; then systemctl stop nginx 2>/dev/null || true; systemctl disable nginx 2>/dev/null || true; fi
-    if has_cmd apache2; then systemctl stop apache2 2>/dev/null || true; systemctl disable apache2 2>/dev/null || true; fi
-    sleep 1
   fi
+  # Matar procesos conocidos que puedan ocupar el 443 (y el puerto mismo)
+  systemctl stop caddy 2>/dev/null || true
+  systemctl disable caddy 2>/dev/null || true
+  systemctl stop nginx 2>/dev/null || true
+  systemctl disable nginx 2>/dev/null || true
+  systemctl stop apache2 2>/dev/null || true
+  systemctl disable apache2 2>/dev/null || true
+  pkill -f 'caddy run' 2>/dev/null || true
+  pkill -f '/usr/bin/caddy' 2>/dev/null || true
+  # Si el propio proxy bindea el 443 (enable_wss), sacarlo de ahí
+  if command -v python3 >/dev/null 2>&1 && grep -q 'enable_wss.*true' "$CONFIG_FILE" 2>/dev/null; then
+    warn "El proxy bindea el 443 (enable_wss) — lo apago para que stunnel use el puerto"
+    sed -i 's/"enable_wss": true/"enable_wss": false/' "$CONFIG_FILE" 2>/dev/null || true
+    systemctl restart "$SERVICE_NAME" 2>/dev/null || true
+  fi
+  sleep 1
   # 4) Servicio
   if has_cmd systemctl; then
     cat > /etc/systemd/system/stunnel-epro.service <<'EOF'
