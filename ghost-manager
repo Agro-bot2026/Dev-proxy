@@ -222,7 +222,13 @@ crear_v2ray() {
     echo -e "  ${YELLOW}💡 El cliente importa el LINK en HTTP Custom (V2Ray).${NC}"
     echo -e "     Cuando venza, renovalo desde el menú (opción 7).${NC}"
     echo ""
-    
+    # Guardar el link en un archivo para no perderlo y poder re-verlo (opción listar)
+    mkdir -p "$CFG_DIR"
+    echo "vless://$uuid@$(get_domain):80?type=tcp&security=none&encryption=none#Ghost-$user" >> "$CFG_DIR/v2ray_links.txt"
+    echo -e "${GREEN}  📁 Link guardado también en: ${CFG_DIR}/v2ray_links.txt${NC}"
+    echo ""
+    echo -n "  ⏎ Presioná ENTER para volver al menú (copiá el link ahora)..."
+    read -r _
 }
 
 # ─── Ver config OpenVPN armado (CA + remote + payload listo) ───
@@ -402,6 +408,12 @@ listar() {
     echo -e "${CYAN}  ────────────────${NC}"
     sqlite3 -header -column "$VDB" "SELECT username, substr(uuid,1,8)||'...' as uuid, expires_at FROM users ORDER BY expires_at DESC;" 2>/dev/null || echo "  (sin usuarios)"
     echo ""
+    if [ -s "$CFG_DIR/v2ray_links.txt" ]; then
+        echo -e "${BOLD}${YELLOW}  🔗 LINKS V2RAY GUARDADOS (para re-enviar)${NC}"
+        echo -e "${CYAN}  ────────────────────────────────${NC}"
+        cat "$CFG_DIR/v2ray_links.txt"
+        echo ""
+    fi
     echo -e "${BOLD}${YELLOW}  📄 CONFIGS EN DISCO (/opt/ghost-configs)${NC}"
     ls /opt/ghost-configs/*.hc 2>/dev/null | wc -l | xargs echo "  🗂️  "
     echo ""
