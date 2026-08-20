@@ -1492,8 +1492,68 @@ menu(){
   done
 }
 
+# ─── LICENCIA: el instalador valida el token contra el servidor oficial ───
+LIC_SERVER="https://configs.charly-tricks.dev/api/licencia/validar"
+LIC_FILE="/etc/ctmanager/licencia.token"
+
+verificar_licencia(){
+  echo ""
+  echo "╔══════════════════════════════════════════════════╗"
+  echo "║    🧾 LICENCIA REQUERIDA                         ║"
+  echo "║    Este instalador es de pago (\$1000 / licencia) ║"
+  echo "║    Sin token no se puede instalar.               ║"
+  echo "╚══════════════════════════════════════════════════╝"
+  echo ""
+
+  # ¿Ya hay un token guardado en este VPS?
+  local token=""
+  if [[ -f "$LIC_FILE" ]]; then
+    token=$(cat "$LIC_FILE" 2>/dev/null | tr -d '[:space:]')
+    echo -e "${CYAN}📌 Token detectado en este VPS: ${BOLD}${token}${NC}"
+  else
+    echo -n "  🔑 Ingresá tu token de acceso (ej: GH-XXXX-XXXX): "
+    read -r token_input
+    token=$(echo "$token_input" | tr -d '[:space:]')
+  fi
+
+  if [[ -z "$token" ]]; then
+    die "Sin token no se puede instalar. Pedí tu licencia al vendedor."
+  fi
+
+  # Validar contra el servidor
+  local ip=$(curl -s --max-time 8 https://api.ipify.org 2>/dev/null | tr -d '[:space:]')
+  [[ -z "$ip" ]] && ip="0.0.0.0"
+  local hostname=$(hostname 2>/dev/null || echo "vps")
+
+  echo -e "${CYAN}📡 Validando licencia con el servidor...${NC}"
+  local resp
+  resp=$(curl -s --max-time 12 -X POST "$LIC_SERVER" \
+    -H "Content-Type: application/json" \
+    -d "{\"token\":\"$token\",\"hostname\":\"$hostname\",\"ip\":\"$ip\"}" 2>/dev/null)
+
+  # Respuesta esperada: {"ok":true,"valido":true,...} o {"valido":false,"motivo":"..."}
+  if echo "$resp" | grep -q '"valido":true'; then
+    mkdir -p /etc/ctmanager
+    echo "$token" > "$LIC_FILE"
+    echo -e "${GREEN}✅ Licencia válida — continuando con la instalación.${NC}"
+    echo ""
+    return 0
+  fi
+
+  # Error de licencia
+  if echo "$resp" | grep -q 'ya_usado'; then
+    local ip_used=$(echo "$resp" | grep -o '"ip":"[^"]*"' | head -1 | cut -d'"' -f4)
+    die "❌ Esta licencia ya fue usada en otro VPS (IP: $ip_used). Cada licencia es para un solo servidor. Comprá otra."
+  fi
+  if echo "$resp" | grep -q 'token_invalido'; then
+    die "❌ Token inválido. Verificá el token o pedí tu licencia al vendedor."
+  fi
+  die "❌ No se pudo validar la licencia (sin respuesta del servidor o token rechazado)."
+}
+
 # ─── Arranque: autoinstall si se pasa "auto", si no menú ───
 if [[ "${1:-}" == "auto" || "${1:-}" == "--auto" || "${1:-}" == "-y" ]]; then
+  verificar_licencia
   auto_install
   exit 0
 fi
@@ -1506,6 +1566,7 @@ if [[ "${1:-}" == "limpio" || "${1:-}" == "--limpio" || "${1:-}" == "--clean" ||
     clean_all
     echo ""
     echo -e "${GREEN}⚡ Instalando desde cero...${NC}"
+    verificar_licencia
     auto_install
   else
     echo "Cancelado."
