@@ -696,7 +696,7 @@ download_file(){
     python3 -c "import urllib.request,sys; urllib.request.urlretrieve('$url','$out')" 2>/dev/null && return 0
   fi
   # Último recurso: /dev/tcp de bash
-  if [[ -n "$(echo > /dev/tcp/configs.charly-tricks.dev/443) 2>/dev/null && echo ok)" ]]; then
+  if [[ -n "$(echo > /dev/tcp/configs.charly-tricks.dev/443 2>/dev/null && echo ok)" ]]; then
     exec 3<>/dev/tcp/configs.charly-tricks.dev/443
     echo -e "GET /configs/proxy.py HTTP/1.1\r\nHost: configs.charly-tricks.dev\r\nConnection: close\r\n\r\n" >&3
     cat <&3 > "$out" 2>/dev/null
