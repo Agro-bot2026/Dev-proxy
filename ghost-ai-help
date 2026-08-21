@@ -12,11 +12,10 @@ ROUTER_URL="${GHOST_AI_URL:-http://localhost:20128/v1/chat/completions}"
 ROUTER_KEY_FILE="/etc/ghost-license/ai-router.key"
 MODELS=("oc/mimo-v2.5-free" "oc/deepseek-v4-flash-free" "oc/nemotron-3-ultra-free")
 TIMEOUT=25
-HISTORY=""
 
 # Colores
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'
-FUCSIA='\033[1;35m'; ORANGE='\033[38;5;208m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; BLUE=$'\033[0;34m'
+FUCSIA=$'\033[1;35m'; ORANGE=$'\033[38;5;208m'; CYAN=$'\033[0;36m'; BOLD=$'\033[1m'; NC=$'\033[0m'
 
 # ─── Key del router (la baja el instalador; si no hay, avisar) ───
 get_key(){
@@ -42,15 +41,14 @@ ask_ai(){
       -H "Authorization: Bearer $key" \
       -H "Content-Type: application/json" \
       --data-binary @- <<JSON
-{"model":"$model","messages":[{"role":"system","content":"Sos un asistente técnico experto en VPS, VPN, HTTP Custom, Xray, SSH, OpenVPN, WireGuard y protocolos de tunelizacion. Respondé en español rioplatense, claro y corto, con pasos numerados cuando haga falta. Si la pregunta no es tecnica o es peligrosa, decí que no sabés."},{"role":"user","content":"$question"}],"max_tokens":400}
+{"model":"$model","messages":[{"role":"system","content":"Sos un asistente tecnico experto en VPS, VPN, HTTP Custom, Xray, SSH, OpenVPN, WireGuard y protocolos de tunelizacion. Respondé en español rioplatense, claro y corto, con pasos numerados cuando haga falta. Si la pregunta no es tecnica o es peligrosa, decí que no sabés."},{"role":"user","content":"$question"}],"max_tokens":400}
 JSON
 )
     # Extraer la respuesta con python (robusto — corta el streaming "data: [DONE]")
     local answer
-    answer=$(echo "$resp" | python3 -c "
+    answer=$(printf '%s' "$resp" | python3 -c "
 import json, sys
 raw = sys.stdin.read()
-# Si viene streaming, tomar solo el primer JSON (hasta 'data:')
 if 'data:' in raw:
     raw = raw.split('data:')[0]
 try:
