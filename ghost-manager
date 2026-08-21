@@ -565,11 +565,95 @@ menu() {
 }
 
 
-# ─── Ver conexiones en vivo (desde el journal del proxy) ───
+# ─── Ver conexiones en vivo (desde el journal del proxy + geo completo) ───
+GEO_DB="/etc/ghost-monitor/geo_countries.db"
+
+# Instalar/actualizar la base de países (una sola vez, ~3MB)
+ensure_geo_db() {
+    if [[ ! -f "$GEO_DB" ]]; then
+        echo -e "  ${CYAN}  🌍 Descargando base de países (1 vez)...${NC}"
+        mkdir -p /etc/ghost-monitor
+        curl -sL --max-time 120 -o /tmp/dbip.csv "https://raw.githubusercontent.com/sapics/ip-location-db/main/dbip-country/dbip-country-ipv4.csv" 2>/dev/null
+        python3 - <<'EOF'
+import sqlite3, ipaddress
+conn = sqlite3.connect("/etc/ghost-monitor/geo_countries.db")
+conn.execute("DROP TABLE IF EXISTS geo")
+conn.execute("CREATE TABLE geo (start INTEGER, end INTEGER, cc TEXT)")
+batch = []
+try:
+    with open("/tmp/dbip.csv") as f:
+        for line in f:
+            p = line.strip().split(",")
+            if len(p) != 3: continue
+            try:
+                batch.append((int(ipaddress.IPv4Address(p[0])), int(ipaddress.IPv4Address(p[1])), p[2]))
+            except Exception: continue
+            if len(batch) >= 50000:
+                conn.executemany("INSERT INTO geo VALUES (?,?,?)", batch); batch = []
+    if batch: conn.executemany("INSERT INTO geo VALUES (?,?,?)", batch)
+    conn.commit()
+except Exception as e:
+    print(f"geo db error: {e}")
+conn.close()
+EOF
+        rm -f /tmp/dbip.csv
+        chmod 644 "$GEO_DB"
+    fi
+}
+
+# País por IP (usa la DB completa, sin internet)
+geo_of() {
+    local ip="$1"
+    python3 -c "
+import sqlite3, ipaddress, sys
+try:
+    n = int(ipaddress.IPv4Address('$ip'))
+    conn = sqlite3.connect('$GEO_DB')
+    row = conn.execute('SELECT cc FROM geo WHERE start<=? AND end>=? ORDER BY start DESC LIMIT 1', (n, n)).fetchone()
+    conn.close()
+    print(row[0] if row else '??')
+except Exception:
+    print('??')
+"
+}
+
+# Bandera por código de país
+flag_of() {
+    local cc="$1"
+    case "$cc" in
+        AR) echo "🇦🇷 Argentina";; BR) echo "🇧🇷 Brasil";; CL) echo "🇨🇱 Chile";;
+        CO) echo "🇨🇴 Colombia";; MX) echo "🇲🇽 México";; PE) echo "🇵🇪 Perú";;
+        UY) echo "🇺🇾 Uruguay";; PY) echo "🇵🇾 Paraguay";; BO) echo "🇧🇴 Bolivia";;
+        VE) echo "🇻🇪 Venezuela";; EC) echo "🇪🇨 Ecuador";; DO) echo "🇩🇴 RD";;
+        CR) echo "🇨🇷 Costa Rica";; GT) echo "🇬🇹 Guatemala";; SV) echo "🇸🇻 El Salvador";;
+        HN) echo "🇭🇳 Honduras";; NI) echo "🇳🇮 Nicaragua";; PA) echo "🇵🇦 Panamá";;
+        CU) echo "🇨🇺 Cuba";; PR) echo "🇵🇷 Puerto Rico";; US) echo "🇺🇸 USA";;
+        NL) echo "🇳🇱 Países Bajos";; FR) echo "🇫🇷 Francia";; DE) echo "🇩🇪 Alemania";;
+        ES) echo "🇪🇸 España";; IT) echo "🇮🇹 Italia";; GB) echo "🇬🇧 Reino Unido";;
+        RU) echo "🇷🇺 Rusia";; CA) echo "🇨🇦 Canadá";; AU) echo "🇦🇺 Australia";;
+        CN) echo "🇨🇳 China";; JP) echo "🇯🇵 Japón";; IN) echo "🇮🇳 India";;
+        BR) echo "🇧🇷 Brasil";; PT) echo "🇵🇹 Portugal";; UA) echo "🇺🇦 Ucrania";;
+        SE) echo "🇸🇪 Suecia";; CH) echo "🇨🇭 Suiza";; AT) echo "🇦🇹 Austria";;
+        BE) echo "🇧🇪 Bélgica";; IE) echo "🇮🇪 Irlanda";; PL) echo "🇵🇱 Polonia";;
+        CZ) echo "🇨🇿 Chequia";; RO) echo "🇷🇴 Rumania";; GR) echo "🇬🇷 Grecia";;
+        TR) echo "🇹🇷 Turquía";; IL) echo "🇮🇱 Israel";; ZA) echo "🇿🇦 Sudáfrica";;
+        EG) echo "🇪🇬 Egipto";; NG) echo "🇳🇬 Nigeria";; SA) echo "🇸🇦 Arabia Saudita";;
+        AE) echo "🇦🇪 Emiratos";; SG) echo "🇸🇬 Singapur";; HK) echo "🇭🇰 Hong Kong";;
+        KR) echo "🇰🇷 Corea";; TW) echo "🇹🇼 Taiwán";; TH) echo "🇹🇭 Tailandia";;
+        ID) echo "🇮🇩 Indonesia";; PH) echo "🇵🇭 Filipinas";; MY) echo "🇲🇾 Malasia";;
+        NZ) echo "🇳🇿 Nueva Zelanda";; FI) echo "🇫🇮 Finlandia";; NO) echo "🇳🇴 Noruega";;
+        DK) echo "🇩🇰 Dinamarca";; LU) echo "🇱🇺 Luxemburgo";; BG) echo "🇧🇬 Bulgaria";;
+        HR) echo "🇭🇷 Croacia";; RS) echo "🇷🇸 Serbia";; SK) echo "🇸🇰 Eslovaquia";;
+        SI) echo "🇸🇮 Eslovenia";; LT) echo "🇱🇹 Lituania";; LV) echo "🇱🇻 Letonia";;
+        EE) echo "🇪🇪 Estonia";; IS) echo "🇮🇸 Islandia";; MT) echo "🇲🇹 Malta";;
+        CY) echo "🇨🇾 Chipre";; * ) echo "🏳️ $cc";;
+    esac
+}
+
 ver_conexiones() {
+    ensure_geo_db
     echo -e "${BOLD}${YELLOW}  📡 CONEXIONES EN VIVO${NC}"
     echo -e "${CYAN}  ─────────────────────────────────────────────────────────────${NC}"
-    # Extraer IPs + protocolo del journal del proxy
     local lineas
     lineas=$(journalctl -u pymanager --since "48 hours ago" --no-pager -o cat 2>/dev/null | grep -oE "Tunel ::ffff:[0-9.]+ -> [0-9.:]+ \([A-Za-z ]+\)" || true)
     if [[ -z "$lineas" ]]; then
@@ -577,7 +661,6 @@ ver_conexiones() {
         echo -e "  ${CYAN}  Cuando alguien conecte con un config, aparece acá.${NC}"
         return
     fi
-    # Procesar: agrupar por IP
     echo -e "  ${BOLD}${BLUE}  #   IP PÚBLICA          PAÍS            PROTOCOLO   CON.${NC}"
     echo -e "  ${CYAN}  ─────────────────────────────────────────────────────────────${NC}"
     local n=0
@@ -586,28 +669,10 @@ ver_conexiones() {
             local ip proto
             ip="${data%%|*}"; proto="${data##*|}"
             n=$((n+1))
-            # Geo por prefijo (rápido, sin internet)
-            local pais="??"
-            case "$ip" in
-                186.*|190.*|200.*|181.*|201.*|179.*|131.*|138.*|168.*) pais="🇦🇷 Argentina";;
-                177.*|179.2*|187.*|189.*|191.*) pais="🇧🇷 Brasil";;
-                200.55*|189.1*|201.1*|148.0*) pais="🇲🇽 México";;
-                186.8*|190.0*|181.4*|191.9*) pais="🇨🇴 Colombia";;
-                190.2*|200.6*) pais="🇵🇪 Perú";;
-                190.1*|200.1*|201.2*) pais="🇨🇱 Chile";;
-                186.4*|167.5*) pais="🇺🇾 Uruguay";;
-                181.2*|200.8*) pais="🇵🇾 Paraguay";;
-                190.7*|200.7*|190.9*) pais="🇻🇪 Venezuela";;
-                190.1*|186.1*) pais="🇩🇴 RD";;
-                23.*|45.*|104.*|107.*|108.*|162.*|163.*|192.*|198.*|199.*|208.*|209.*|50.*|52.*|54.*|20.*|40.*|13.*|34.*|35.*|64.233.*|72.14.*|74.125.*|172.217.*|216.58.*) pais="🇺🇸 USA";;
-                5.61.*|45.156.*|93.174.*|185.209.*|213.1*) pais="🇳🇱 Países Bajos";;
-                185.177.*|216.180.*|62.210.*|51.15.*|163.172.*|217.70.*|82.64.*|151.80.*|137.74.*) pais="🇫🇷 Francia";;
-                91.108.*|109.252.*|95.213.*) pais="🇷🇺 Rusia";;
-                5.45.*|88.198.*|144.76.*|188.40.*|46.4.*|78.46.*|176.9.*) pais="🇩🇪 Alemania";;
-                83.60.*|62.14.*|2.136.*) pais="🇪🇸 España";;
-                81.88.*) pais="🇮🇹 Italia";;
-            esac
-            printf "  ${BOLD}${FUCSIA}%2d${NC}  %-18s  %-16s  %-10s  ${ORANGE}%s${NC}\n" "$n" "$ip" "$pais" "$proto" "$count"
+            local cc pais
+            cc=$(geo_of "$ip")
+            pais=$(flag_of "$cc")
+            printf "  ${BOLD}${FUCSIA}%2d${NC}  %-18s  %-18s  %-10s  ${ORANGE}%s${NC}\n" "$n" "$ip" "$pais" "$proto" "$count"
         done
     echo -e "  ${CYAN}  ─────────────────────────────────────────────────────────────${NC}"
     local total ips
