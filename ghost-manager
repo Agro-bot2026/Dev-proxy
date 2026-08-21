@@ -377,6 +377,7 @@ crear_psiphon() {
         fi
         echo ""
         echo -e "  ${BOLD}${GREEN}1${NC}) 📋 Ver el HEX (para importar en HTTP Custom)"
+        echo -e "  ${BOLD}${ORANGE}2${NC}) 🔄 Regenerar credencial (invalida la anterior)"
         echo -e "  ${BOLD}${RED}0${NC}) Volver"
         echo ""
         read -p "  ➤ Opción: " psi_op
@@ -388,6 +389,45 @@ crear_psiphon() {
             echo ""
             echo -e "${CYAN}  ──────────────────────────────────────────${NC}"
             echo -e "  ${YELLOW}💡 Pegá este HEX en: HTTP Custom → Psiphon → Server Entry${NC}"
+        elif [ "$psi_op" = "2" ]; then
+            echo ""
+            echo -e "${BOLD}${RED}  ⚠️  REGENERAR CREDENCIAL PSIPHON${NC}"
+            echo -e "  ${YELLOW}  Esto invalida el server entry actual."
+            echo -e "  ${YELLOW}  Todos los configs Psiphon existentes dejan de funcionar."
+            echo -e "  ${YELLOW}  Los clientes necesitan el HEX NUEVO para reconectar.${NC}"
+            echo ""
+            read -p "  ¿Continuar? (s/N): " conf
+            if [[ "${conf,,}" == "s" || "${conf,,}" == "si" || "${conf,,}" == "y" ]]; then
+                echo -e "  ${CYAN}  Regenerando credencial...${NC}"
+                systemctl stop psiphon 2>/dev/null
+                sleep 1
+                # Generar de nuevo con la IP del VPS
+                local IP_PUB2
+                IP_PUB2="$(curl -4 -s --max-time 5 ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
+                rm -f /etc/psiphon/psiphond.config /etc/psiphon/server-entry.dat
+                (cd /etc/psiphon && /usr/local/bin/psiphon-server -ipaddress "$IP_PUB2" -protocol SSH:2223 generate >/dev/null 2>&1)
+                if [ -f /etc/psiphon/server-entry.dat ]; then
+                    # Sincronizar con las copias del stack
+                    mkdir -p /etc/ghost-license
+                    cp -f /etc/psiphon/server-entry.dat /etc/ghost-license/psiphon-server-entry.dat 2>/dev/null
+                    chmod 600 /etc/ghost-license/psiphon-server-entry.dat 2>/dev/null
+                    systemctl start psiphon 2>/dev/null
+                    sleep 2
+                    echo ""
+                    echo -e "  ${GREEN}✅ Credencial regenerada con éxito${NC}"
+                    echo -e "  ${BOLD}${YELLOW}  📋 HEX NUEVO (copiá todo esto):${NC}"
+                    echo -e "${CYAN}  ──────────────────────────────────────────${NC}"
+                    cat /etc/ghost-license/psiphon-server-entry.dat
+                    echo ""
+                    echo -e "${CYAN}  ──────────────────────────────────────────${NC}"
+                    echo -e "  ${RED}  ⚠️  El entry VIEJO ya no funciona. Regenerá los configs de tus clientes.${NC}"
+                else
+                    echo -e "  ${RED}  ❌ Falló la regeneración${NC}"
+                    systemctl start psiphon 2>/dev/null || true
+                fi
+            else
+                echo -e "  ${YELLOW}  Cancelado — no se tocó nada${NC}"
+            fi
         fi
     else
         echo -e "  ${RED}❌ Server Psiphon no instalado${NC}"
