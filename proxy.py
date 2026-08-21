@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # CTManager WebSocket/HTTP Proxy - by CHARLY_TRICKS
-# v13: SSH/OpenVPN/V2Ray/Psiphon + límite 1 conexión por UUID V2Ray
+# v15: SSH/OpenVPN/V2Ray/Psiphon + límite 1 conexión por UUID + CUOTA DE DATOS por IP (quota_gb)
 import socket, threading, json
 
 CONFIG_FILE = "/etc/ctmanager/websocket/config.json"
@@ -37,6 +37,31 @@ def _registrar_trafico(protocolo, src_ip, rx_bytes, tx_bytes):
             con.close()
     except Exception:
         pass
+
+# ─── CUOTA DE DATOS: consumo acumulado de una IP (bytes) en los últimos N días ───
+def _consumo_ip(src_ip, dias=30):
+    try:
+        db = '/etc/ctmanager/config/trafico.db'
+        con = sqlite3.connect(db, timeout=5)
+        row = con.execute(
+            "SELECT SUM(rx_bytes + tx_bytes) FROM trafico WHERE src_ip=? AND fecha >= datetime('now', ?);",
+            (src_ip, f'-{dias} days')).fetchone()
+        con.close()
+        return row[0] or 0
+    except Exception:
+        return 0
+
+# ─── CUOTA: ¿la IP superó el límite? (quota_gb en config.json, 0 = sin límite) ───
+def _quota_excedida(src_ip, cfg):
+    try:
+        quota_gb = float(cfg.get("quota_gb", 0) or 0)
+        if quota_gb <= 0:
+            return False
+        dias = int(cfg.get("quota_dias", 30))
+        usado = _consumo_ip(src_ip, dias)
+        return usado >= quota_gb * 1024 * 1024 * 1024
+    except Exception:
+        return False
 
 def forward(src, dst, _ctx=None):
     rx = 0
@@ -110,6 +135,16 @@ def handle_client(client_socket, cfg):
     max_conn = int(cfg.get("max_connections_per_user", 1))
     src_ip = client_socket.getpeername()[0]
     try:
+        # 0b) CUOTA DE DATOS: si la IP superó el límite → rechazar con 403
+        if _quota_excedida(src_ip, cfg):
+            try:
+                client_socket.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
+            except Exception:
+                pass
+            print(f"[CTManager WS] {src_ip} rechazada: superó cuota de datos ({cfg.get('quota_gb',0)}GB)", flush=True)
+            client_socket.close()
+            return
+
         # 1) Payload HTTP
         client_socket.settimeout(3)
         chunks = b""
