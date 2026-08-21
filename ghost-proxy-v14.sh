@@ -561,8 +561,8 @@ open_all_ports(){
   echo ""
   echo -e "${CYAN}  🔓 Abriendo puertos en el firewall...${NC}"
   # Puertos del stack: 80 (proxy), 22 (SSH), 2223 (Psiphon), 8443 (Xray),
-  # 1194 (OpenVPN), 51820 (WG), 7300 (BadVPN UDP)
-  local puertos_tcp="80 22 2223 8443 1194 51820"
+  # 1194 (OpenVPN), 51820 (WG), 7300 (BadVPN UDP), 20128 (9Router AI)
+  local puertos_tcp="80 22 2223 8443 1194 51820 20128"
   local puertos_udp="80 2223 8443 1194 51820 7300"
 
   if has_cmd ufw; then
@@ -1435,6 +1435,8 @@ do_update(){
 
 
 # ─── Instalar Ghost AI Help (mini asistente gratis vía DeepSeek 9Router) ───
+# El 9Router central del dueño (157.250.202.243:20128) da el servicio a TODOS los VPS
+AI_ROUTER_CENTRAL="157.250.202.243:20128"
 install_ai_help(){
   step "🤖 Ghost AI Help — mini asistente (DeepSeek gratis)"
   local AI_BIN="/usr/local/bin/ghost-ai-help"
@@ -1447,15 +1449,18 @@ install_ai_help(){
     download_file "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ghost-ai-help" "$AI_BIN" 2>/dev/null ||     warn "No pude bajar ghost-ai-help (opcional — el menú sigue funcionando sin IA)"
   fi
   chmod 755 "$AI_BIN" 2>/dev/null || true
-  # 2) Key del router (si viene en el instalador o el VPS del dueño)
+  # 2) Key del router (local si es el VPS del dueño, sino queda para configurar)
   mkdir -p /etc/ghost-license
   if [[ -f /root/.9router-router-key ]]; then
     cp -f /root/.9router-router-key /etc/ghost-license/ai-router.key
     chmod 600 /etc/ghost-license/ai-router.key
-    ok "Ghost AI Help instalado — escribí ghost-ai-help para usarlo"
+  fi
+  # 3) Apuntar al router central (el 9Router del dueño) — así la IA funciona en cualquier VPS
+  if [[ -f "$AI_BIN" ]] && [[ -s /etc/ghost-license/ai-router.key ]]; then
+    sed -i "s|http://localhost:20128|http://${AI_ROUTER_CENTRAL}|" "$AI_BIN" 2>/dev/null || true
+    ok "Ghost AI Help ACTIVO — escribí ghost-ai-help para usarlo (IA vía router central)"
   else
-    # Sin key: el asistente avisa que falta configurar (no rompe nada)
-    warn "Sin key de IA (opcional) — se puede configurar luego en /etc/ghost-license/ai-router.key"
+    warn "Ghost AI Help instalado pero SIN key de IA — configurala en /etc/ghost-license/ai-router.key"
   fi
 }
 
