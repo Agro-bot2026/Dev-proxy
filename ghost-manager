@@ -540,6 +540,7 @@ menu() {
         echo -e "  ${BOLD}${FUCSIA}10${NC}) 🌐 Estado Psiphon (server entry)"
         echo -e "  ${BOLD}${FUCSIA}11${NC}) 🔐 Estado WireGuard"
         echo -e "  ${BOLD}${FUCSIA}12${NC}) 🌐 Panel web (http://IP:8303)"
+        echo -e "  ${BOLD}${FUCSIA}13${NC}) 📡 Ver conexiones en vivo"
         echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -556,10 +557,65 @@ menu() {
             10) crear_psiphon;;
             11) estado_wg;;
             12) panel_web;;
+            13) ver_conexiones;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
     done
+}
+
+
+# ─── Ver conexiones en vivo (desde el journal del proxy) ───
+ver_conexiones() {
+    echo -e "${BOLD}${YELLOW}  📡 CONEXIONES EN VIVO${NC}"
+    echo -e "${CYAN}  ─────────────────────────────────────────────────────────────${NC}"
+    # Extraer IPs + protocolo del journal del proxy
+    local lineas
+    lineas=$(journalctl -u pymanager --since "48 hours ago" --no-pager -o cat 2>/dev/null | grep -oE "Tunel ::ffff:[0-9.]+ -> [0-9.:]+ \([A-Za-z ]+\)" || true)
+    if [[ -z "$lineas" ]]; then
+        echo -e "  ${YELLOW}⚠️  No hay conexiones registradas todavía.${NC}"
+        echo -e "  ${CYAN}  Cuando alguien conecte con un config, aparece acá.${NC}"
+        return
+    fi
+    # Procesar: agrupar por IP
+    echo -e "  ${BOLD}${BLUE}  #   IP PÚBLICA          PAÍS            PROTOCOLO   CON.${NC}"
+    echo -e "  ${CYAN}  ─────────────────────────────────────────────────────────────${NC}"
+    local n=0
+    echo "$lineas" | sed -E 's/.*::ffff:([0-9.]+) -> [0-9.:]+ \(([A-Za-z ]+)\).*/\1|\2/' | \
+        sort | uniq -c | sort -rn | head -20 | while read -r count data; do
+            local ip proto
+            ip="${data%%|*}"; proto="${data##*|}"
+            n=$((n+1))
+            # Geo por prefijo (rápido, sin internet)
+            local pais="??"
+            case "$ip" in
+                186.*|190.*|200.*|181.*|201.*|179.*|131.*|138.*|168.*) pais="🇦🇷 Argentina";;
+                177.*|179.2*|187.*|189.*|191.*) pais="🇧🇷 Brasil";;
+                200.55*|189.1*|201.1*|148.0*) pais="🇲🇽 México";;
+                186.8*|190.0*|181.4*|191.9*) pais="🇨🇴 Colombia";;
+                190.2*|200.6*) pais="🇵🇪 Perú";;
+                190.1*|200.1*|201.2*) pais="🇨🇱 Chile";;
+                186.4*|167.5*) pais="🇺🇾 Uruguay";;
+                181.2*|200.8*) pais="🇵🇾 Paraguay";;
+                190.7*|200.7*|190.9*) pais="🇻🇪 Venezuela";;
+                190.1*|186.1*) pais="🇩🇴 RD";;
+                23.*|45.*|104.*|107.*|108.*|162.*|163.*|192.*|198.*|199.*|208.*|209.*|50.*|52.*|54.*|20.*|40.*|13.*|34.*|35.*|64.233.*|72.14.*|74.125.*|172.217.*|216.58.*) pais="🇺🇸 USA";;
+                5.61.*|45.156.*|93.174.*|185.209.*|213.1*) pais="🇳🇱 Países Bajos";;
+                185.177.*|216.180.*|62.210.*|51.15.*|163.172.*|217.70.*|82.64.*|151.80.*|137.74.*) pais="🇫🇷 Francia";;
+                91.108.*|109.252.*|95.213.*) pais="🇷🇺 Rusia";;
+                5.45.*|88.198.*|144.76.*|188.40.*|46.4.*|78.46.*|176.9.*) pais="🇩🇪 Alemania";;
+                83.60.*|62.14.*|2.136.*) pais="🇪🇸 España";;
+                81.88.*) pais="🇮🇹 Italia";;
+            esac
+            printf "  ${BOLD}${FUCSIA}%2d${NC}  %-18s  %-16s  %-10s  ${ORANGE}%s${NC}\n" "$n" "$ip" "$pais" "$proto" "$count"
+        done
+    echo -e "  ${CYAN}  ─────────────────────────────────────────────────────────────${NC}"
+    local total ips
+    total=$(echo "$lineas" | wc -l)
+    ips=$(echo "$lineas" | sed -E 's/.*::ffff:([0-9.]+).*/\1/' | sort -u | wc -l)
+    echo -e "  ${BOLD}${GREEN}  Total: $total conexiones · $ips IPs únicas (últimas 48h)${NC}"
+    echo ""
+    read -p "  ⏎ Enter para volver al menú..."
 }
 
 # ─── Inicio ───
