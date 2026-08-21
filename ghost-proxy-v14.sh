@@ -121,7 +121,9 @@ write_config(){
   "psiphon_host": "127.0.0.1",
   "psiphon_port": 2223,
   "wg_host": "127.0.0.1",
-  "wg_port": 51821
+  "wg_port": 51821,
+  "quota_gb": 200,
+  "quota_dias": 30
 }
 EOF
     ok "Config creado: $CONFIG_FILE"
