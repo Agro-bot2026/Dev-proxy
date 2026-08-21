@@ -1485,7 +1485,7 @@ install_ai_help(){
       case "$prov" in
         1) PROV=anthropic; DEF_MODEL="claude-sonnet-4-20250514"; URL="";;
         2) PROV=openai;    DEF_MODEL="gpt-4o-mini";          URL="";;
-        3) PROV=deepseek;  DEF_MODEL="deepseek-chat";        URL="";;
+        3) PROV=deepseek;  DEF_MODEL="deepseek-v4-flash";        URL="";;
         4) PROV=otro;      DEF_MODEL="gpt-4o-mini";          read -r -p "  🌐 Base URL (ej https://api.x.com/v1): " URL;;
         *) PROV=anthropic; DEF_MODEL="claude-sonnet-4-20250514"; URL="";;
       esac
