@@ -582,6 +582,7 @@ menu() {
         echo -e "  ${BOLD}${FUCSIA}12${NC}) 🌐 Panel web (http://IP:8303)"
         echo -e "  ${BOLD}${FUCSIA}13${NC}) 📡 Ver conexiones en vivo"
         echo -e "  ${BOLD}${FUCSIA}14${NC}) 🤖 Ayuda IA (gratis, DeepSeek)"
+        echo -e "  ${BOLD}${FUCSIA}15${NC}) 📊 Ver consumo de datos (cuota por IP)"
         echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -600,6 +601,7 @@ menu() {
             12) panel_web;;
             13) ver_conexiones;;
             14) ghost-ai-help;;
+            15) ver_consumo;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
@@ -721,6 +723,55 @@ ver_conexiones() {
     total=$(echo "$lineas" | wc -l)
     ips=$(echo "$lineas" | sed -E 's/.*::ffff:([0-9.]+).*/\1/' | sort -u | wc -l)
     echo -e "  ${BOLD}${GREEN}  Total: $total conexiones · $ips IPs únicas (últimas 48h)${NC}"
+    echo ""
+    read -p "  ⏎ Enter para volver al menú..."
+}
+
+
+# ─── Ver consumo de datos por IP (cuota) ───
+ver_consumo() {
+    echo -e "${BOLD}${YELLOW}  📊 CONSUMO DE DATOS (cuota por IP)${NC}"
+    echo -e "${CYAN}  ─────────────────────────────────────────────${NC}"
+    # Cuota actual del config
+    local quota dias
+    quota=$(python3 -c "import json; print(json.load(open('/etc/ctmanager/websocket/config.json')).get('quota_gb', 0))" 2>/dev/null)
+    dias=$(python3 -c "import json; print(json.load(open('/etc/ctmanager/websocket/config.json')).get('quota_dias', 30))" 2>/dev/null)
+    echo -e "  ${BOLD}${BLUE}  Cuota configurada: ${ORANGE}${quota:-0} GB${NC} (ventana: ${dias:-30} días)"
+    echo -e "  ${CYAN}  ─────────────────────────────────────────────${NC}"
+    echo -e "  ${BOLD}  IP               CONSUMIDO      % CUOTA   PROTO"
+    echo -e "  ${CYAN}  ─────────────────────────────────────────────${NC}"
+    # Top 15 IPs por consumo (últimos 30 días)
+    sqlite3 -separator '|' /etc/ctmanager/config/trafico.db \
+      "SELECT src_ip, SUM(rx_bytes+tx_bytes) as total, GROUP_CONCAT(DISTINCT protocolo) FROM trafico WHERE fecha >= datetime('now','-${dias:-30} days') GROUP BY src_ip ORDER BY total DESC LIMIT 15;" 2>/dev/null | \
+    while IFS='|' read -r ip total protos; do
+        local gb pct
+        gb=$(python3 -c "print(f'{$total/1073741824:.2f}')" 2>/dev/null)
+        if [[ -n "$quota" && "$quota" != "0" ]]; then
+            pct=$(python3 -c "print(f'{($total/1073741824)/$quota*100:.1f}')" 2>/dev/null)
+        else
+            pct="—"
+        fi
+        printf "  %-17s %6s GB   %6s%%    %s\n" "$ip" "$gb" "$pct" "${protos:0:20}"
+    done
+    echo -e "  ${CYAN}  ─────────────────────────────────────────────${NC}"
+    echo ""
+    read -p "  ¿Cambiar la cuota? (s/N): " cq
+    if [[ "${cq,,}" == "s" ]]; then
+        read -p "  Nuevo límite en GB (0 = sin límite): " nueva
+        if [[ "$nueva" =~ ^[0-9.]+$ ]]; then
+            python3 -c "
+import json
+cfg = json.load(open('/etc/ctmanager/websocket/config.json'))
+cfg['quota_gb'] = float('$nueva')
+json.dump(cfg, open('/etc/ctmanager/websocket/config.json','w'), indent=2)
+print('Cuota actualizada a', '$nueva', 'GB')
+" 2>/dev/null
+            systemctl restart pymanager 2>/dev/null || true
+            echo -e "  ${GREEN}✅ Cuota cambiada a ${ORANGE}${nueva} GB${NC}"
+        else
+            echo -e "  ${RED}  ❌ Número inválido${NC}"
+        fi
+    fi
     echo ""
     read -p "  ⏎ Enter para volver al menú..."
 }
