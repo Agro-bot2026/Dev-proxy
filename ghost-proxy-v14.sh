@@ -827,6 +827,7 @@ EOF
   fi
 }
 
+
 # ─── Instalar Xray (V2Ray: binario + config + servicio + uuid.sh) ───
 install_xray(){
   need_root
