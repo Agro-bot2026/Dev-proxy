@@ -1434,34 +1434,94 @@ do_update(){
 }
 
 
-# ─── Instalar Ghost AI Help (mini asistente gratis vía DeepSeek 9Router) ───
-# El 9Router central del dueño (157.250.202.243:20128) da el servicio a TODOS los VPS
+# ─── Instalar Ghost AI Help (mini asistente — 3 opciones de IA) ───
+# El 9Router central del dueño (157.250.202.243:20128) da servicio gratis a todos los VPS
 AI_ROUTER_CENTRAL="157.250.202.243:20128"
 install_ai_help(){
-  step "🤖 Ghost AI Help — mini asistente (DeepSeek gratis)"
+  step "🤖 Ghost AI Help — asistente en el menú"
   local AI_BIN="/usr/local/bin/ghost-ai-help"
+  local CONFIG="/etc/ghost-license/ai-config"
+  mkdir -p /etc/ghost-license
+
   # 1) Copiar el script (local primero, sino descargar)
   if [[ -f "$(dirname "$0")/ghost-ai-help" ]]; then
     cp -f "$(dirname "$0")/ghost-ai-help" "$AI_BIN"
   elif [[ -f /root/ghost-ai-help ]]; then
     cp -f /root/ghost-ai-help "$AI_BIN"
   else
-    download_file "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ghost-ai-help" "$AI_BIN" 2>/dev/null ||     warn "No pude bajar ghost-ai-help (opcional — el menú sigue funcionando sin IA)"
+    download_file "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ghost-ai-help" "$AI_BIN" 2>/dev/null || \
+    warn "No pude bajar ghost-ai-help (opcional — el menú sigue funcionando sin IA)"
   fi
   chmod 755 "$AI_BIN" 2>/dev/null || true
-  # 2) Key del router (local si es el VPS del dueño, sino queda para configurar)
-  mkdir -p /etc/ghost-license
-  if [[ -f /root/.9router-router-key ]]; then
+
+  # 2) Si el VPS es el del dueño, guardar la key del router
+  if [[ -f /root/.9router-router-key ]] && [[ ! -f /etc/ghost-license/ai-router.key ]]; then
     cp -f /root/.9router-router-key /etc/ghost-license/ai-router.key
     chmod 600 /etc/ghost-license/ai-router.key
   fi
-  # 3) Apuntar al router central (el 9Router del dueño) — así la IA funciona en cualquier VPS
-  if [[ -f "$AI_BIN" ]] && [[ -s /etc/ghost-license/ai-router.key ]]; then
-    sed -i "s|http://localhost:20128|http://${AI_ROUTER_CENTRAL}|" "$AI_BIN" 2>/dev/null || true
-    ok "Ghost AI Help ACTIVO — escribí ghost-ai-help para usarlo (IA vía router central)"
-  else
-    warn "Ghost AI Help instalado pero SIN key de IA — configurala en /etc/ghost-license/ai-router.key"
+
+  # 3) Preguntar qué IA usar (solo si hay tty; en autoinstal sin tty → router gratis)
+  local eleccion="1"
+  if [[ -t 0 ]]; then
+    echo ""
+    echo -e "  ${BOLD}${CYAN}  🤖 ¿Asistente IA en el menú?${NC}"
+    echo -e "  ${BOLD}${FUCSIA}1${NC}) 🆓 Gratis (router del vendedor — DeepSeek, sin costo)"
+    echo -e "  ${BOLD}${FUCSIA}2${NC}) 🔑 Usar MI propia API key (Anthropic/OpenAI/DeepSeek)"
+    echo -e "  ${BOLD}${FUCSIA}3${NC}) ❌ No quiero IA"
+    read -r -p "  ➤ Opción [1]: " eleccion
+    eleccion="${eleccion:-1}"
   fi
+
+  case "$eleccion" in
+    2)
+      # ── API propia del cliente ──
+      echo -e "  ${BOLD}${CYAN}  🔑 ¿Qué proveedor?${NC}"
+      echo -e "  ${BOLD}${FUCSIA}1${NC}) Anthropic (Claude)"
+      echo -e "  ${BOLD}${FUCSIA}2${NC}) OpenAI (GPT)"
+      echo -e "  ${BOLD}${FUCSIA}3${NC}) DeepSeek"
+      echo -e "  ${BOLD}${FUCSIA}4${NC}) Otro (compatible OpenAI)"
+      read -r -p "  ➤ Proveedor [1]: " prov
+      prov="${prov:-1}"
+      case "$prov" in
+        1) PROV=anthropic; DEF_MODEL="claude-sonnet-4-20250514"; URL="";;
+        2) PROV=openai;    DEF_MODEL="gpt-4o-mini";          URL="";;
+        3) PROV=deepseek;  DEF_MODEL="deepseek-chat";        URL="";;
+        4) PROV=otro;      DEF_MODEL="gpt-4o-mini";          read -r -p "  🌐 Base URL (ej https://api.x.com/v1): " URL;;
+        *) PROV=anthropic; DEF_MODEL="claude-sonnet-4-20250514"; URL="";;
+      esac
+      read -r -p "  🔑 Pegá tu API key: " APIKEY
+      read -r -p "  🧠 Modelo [Enter=$DEF_MODEL]: " MODELO
+      MODELO="${MODELO:-$DEF_MODEL}"
+      if [[ -n "$APIKEY" ]]; then
+        cat > "$CONFIG" <<EOF
+PROVEEDOR=$PROV
+API_KEY=$APIKEY
+MODELO=$MODELO
+BASE_URL=$URL
+EOF
+        chmod 600 "$CONFIG"
+        ok "IA configurada: $PROV ($MODELO)"
+      else
+        warn "No pegaste key — IA desactivada (podés configurar luego en $CONFIG)"
+        rm -f "$CONFIG"
+      fi
+      ;;
+    3)
+      # ── Sin IA ──
+      rm -f "$CONFIG"
+      ok "Sin IA — el menú funciona igual"
+      ;;
+    *)
+      # ── Router gratis (default) ──
+      rm -f "$CONFIG"
+      if [[ -f /etc/ghost-license/ai-router.key ]]; then
+        sed -i "s|http://localhost:20128|http://${AI_ROUTER_CENTRAL}|" "$AI_BIN" 2>/dev/null || true
+        ok "IA gratis ACTIVA (router del vendedor — DeepSeek)"
+      else
+        warn "IA gratis instalada pero SIN key — configurala en /etc/ghost-license/ai-router.key"
+      fi
+      ;;
+  esac
 }
 
 # ─── Menú principal ───
