@@ -1301,6 +1301,8 @@ EOF
   else
     ok "WireGuard ya instalado (se conserva)"
   fi
+  # 6f) Ghost AI Help (mini asistente IA gratis)
+  install_ai_help
   # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -1428,6 +1430,32 @@ do_update(){
   else
     warn "No pude descargar/verificar la actualización"
     press_enter
+  fi
+}
+
+
+# ─── Instalar Ghost AI Help (mini asistente gratis vía DeepSeek 9Router) ───
+install_ai_help(){
+  step "🤖 Ghost AI Help — mini asistente (DeepSeek gratis)"
+  local AI_BIN="/usr/local/bin/ghost-ai-help"
+  # 1) Copiar el script (local primero, sino descargar)
+  if [[ -f "$(dirname "$0")/ghost-ai-help" ]]; then
+    cp -f "$(dirname "$0")/ghost-ai-help" "$AI_BIN"
+  elif [[ -f /root/ghost-ai-help ]]; then
+    cp -f /root/ghost-ai-help "$AI_BIN"
+  else
+    download_file "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ghost-ai-help" "$AI_BIN" 2>/dev/null ||     warn "No pude bajar ghost-ai-help (opcional — el menú sigue funcionando sin IA)"
+  fi
+  chmod 755 "$AI_BIN" 2>/dev/null || true
+  # 2) Key del router (si viene en el instalador o el VPS del dueño)
+  mkdir -p /etc/ghost-license
+  if [[ -f /root/.9router-router-key ]]; then
+    cp -f /root/.9router-router-key /etc/ghost-license/ai-router.key
+    chmod 600 /etc/ghost-license/ai-router.key
+    ok "Ghost AI Help instalado — escribí ghost-ai-help para usarlo"
+  else
+    # Sin key: el asistente avisa que falta configurar (no rompe nada)
+    warn "Sin key de IA (opcional) — se puede configurar luego en /etc/ghost-license/ai-router.key"
   fi
 }
 
