@@ -541,6 +541,7 @@ menu() {
         echo -e "  ${BOLD}${FUCSIA}11${NC}) 🔐 Estado WireGuard"
         echo -e "  ${BOLD}${FUCSIA}12${NC}) 🌐 Panel web (http://IP:8303)"
         echo -e "  ${BOLD}${FUCSIA}13${NC}) 📡 Ver conexiones en vivo"
+        echo -e "  ${BOLD}${FUCSIA}14${NC}) 🤖 Ayuda IA (gratis, DeepSeek)"
         echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -558,6 +559,7 @@ menu() {
             11) estado_wg;;
             12) panel_web;;
             13) ver_conexiones;;
+            14) ghost-ai-help;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
