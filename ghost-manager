@@ -585,6 +585,7 @@ menu() {
         echo -e "  ${BOLD}${FUCSIA}15${NC}) 📊 Ver consumo de datos (cuota por IP)"
         echo -e "  ${BOLD}${FUCSIA}16${NC}) 📊 Consumo por UUID VLESS (top conexiones)"
         echo -e "  ${BOLD}${FUCSIA}17${NC}) 🗑️  Eliminar usuario VLESS"
+        echo -e "  ${BOLD}${FUCSIA}18${NC}) 📊 Consumo Psiphon por IP"
         echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -606,6 +607,7 @@ menu() {
             15) ver_consumo;;
             16) ver_consumo_vless;;
             17) eliminar_vless;;
+            18) ver_consumo_psiphon;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
@@ -854,6 +856,30 @@ eliminar_vless() {
     echo -e "  ${GREEN}  ✅ Usuario VLESS '$user' eliminado — acceso cortado${NC}"
     echo ""
     read -p "  ⏎ Enter para continuar..."
+}
+
+
+# ─── Ver consumo Psiphon por IP ───
+ver_consumo_psiphon() {
+    echo -e "${BOLD}${YELLOW}  📊 CONSUMO PSIPHON POR IP${NC}"
+    echo -e "${CYAN}  ────────────────────────────────${NC}"
+    local dias
+    dias=$(python3 -c "import json; print(json.load(open('/etc/ctmanager/websocket/config.json')).get('quota_dias', 30))" 2>/dev/null)
+    dias=${dias:-30}
+    echo -e "  ${BOLD}  IP               CONSUMIDO    CONEXIONES   ÚLTIMA VEZ"
+    echo -e "  ${CYAN}  ────────────────────────────────${NC}"
+    sqlite3 -separator '|' /etc/ctmanager/config/trafico.db \
+      "SELECT src_ip, SUM(rx_bytes+tx_bytes) as total, SUM(conexiones) as conns, MAX(fecha) FROM trafico WHERE protocolo='psiphon' AND fecha >= datetime('now','-${dias} days') GROUP BY src_ip ORDER BY total DESC LIMIT 15;" 2>/dev/null | \
+    while IFS='|' read -r ip total conns ult; do
+        local gb
+        gb=$(python3 -c "print(f'{$total/1073741824:.2f}')" 2>/dev/null)
+        printf "  %-17s %6s GB   %8s   %s\n" "$ip" "$gb" "${conns:-0}" "${ult:0:16}"
+    done
+    echo -e "  ${CYAN}  ────────────────────────────────${NC}"
+    echo -e "  ${YELLOW}  ℹ️  Psiphon usa un server entry único — el rastreo es por IP,${NC}"
+    echo -e "  ${YELLOW}     no por usuario (no hay UUIDs individuales).${NC}"
+    echo ""
+    read -p "  ⏎ Enter para volver al menú..."
 }
 
 
