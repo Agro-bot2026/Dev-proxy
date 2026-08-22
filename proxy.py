@@ -97,6 +97,10 @@ def extraer_uuid_vless(first_packet):
 
 def detect_target(first_packet, cfg):
     ssh_target = (cfg.get("target_host", "127.0.0.1"), int(cfg.get("target_port", 22)))
+    # Si hay sshgo configurado, el SSH normal va al sshgo (banner dinámico por usuario)
+    sshgo_port = int(cfg.get("sshgo_port", 0) or 0)
+    if sshgo_port:
+        ssh_target = (cfg.get("sshgo_host", "127.0.0.1"), sshgo_port)
     ovpn_target = (cfg.get("ovpn_host", "127.0.0.1"), int(cfg.get("ovpn_port", 1194)))
     v2ray_target = (cfg.get("v2ray_host", "127.0.0.1"), int(cfg.get("v2ray_port", 8443)))
     psiphon_target = (cfg.get("psiphon_host", "127.0.0.1"), int(cfg.get("psiphon_port", 2223)))
@@ -268,7 +272,7 @@ def handle_client(client_socket, cfg):
         def watch():
             t1.join(); t2.join(); cleanup()
         threading.Thread(target=watch, daemon=True).start()
-        nom = 'SSH' if target_port==22 else 'OpenVPN' if target_port==1194 else 'V2Ray' if target_port==8443 else 'Psiphon'
+        nom = 'SSHGO' if target_port==2200 else 'SSH' if target_port==22 else 'OpenVPN' if target_port==1194 else 'V2Ray' if target_port==8443 else 'Psiphon'
         extra = f" uuid={uuid_hex[:8]}" if uuid_hex else ""
         print(f"[CTManager WS] Tunel {src_ip} -> {target_host}:{target_port} ({nom}){extra}", flush=True)
     except Exception as e:

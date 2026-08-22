@@ -171,9 +171,10 @@ ghost-manager
 
 | Archivo | Qué es |
 |---------|--------|
-| `ghost-proxy-v14.sh` | Instalador (auto / limpio / menú) |
-| `ghost-manager` | Menú de usuarios (crear/renovar/editar/eliminar) |
-| `proxy.py` | Proxy multi-protocolo (detección por bytes + sirve /ovpn/) |
+| `ghost-proxy-v14.sh` | Instalador (auto / limpio / menú) — instala sshgo + banner automáticamente |
+| `ghost-manager` | Menú de usuarios (16 opciones: consumo UUID/Psiphon, eliminar VLESS, editar banner) |
+| `proxy.py` | Proxy multi-protocolo (detección por bytes + sirve /ovpn/ + ruteo SSH→sshgo) |
+| `sshgo-linux-amd64` | Servidor SSH en Go con banner dinámico (USER/EXP/DAYS/TRF/LIMIT) |
 | `psiphon-server` | Binario de Psiphon server |
 | `xray` | Binario de Xray (V2Ray) |
 | `xray_uuid.sh` | Gestión de UUIDs de Xray |
@@ -185,7 +186,9 @@ ghost-manager
 ```json
 {
   "ws_port": 80,
-  "target_port": 22,        ← SSH
+  "target_port": 22,        ← SSH (va al sshgo si sshgo_port > 0)
+  "sshgo_host": "127.0.0.1",
+  "sshgo_port": 2200,       ← sshgo (banner dinámico en log HTTP Custom)
   "psiphon_host": "IP_PÚBLICA",
   "psiphon_port": 2223,     ← Psiphon
   "v2ray_port": 8443,       ← V2Ray
@@ -201,10 +204,53 @@ El dominio del VPS se guarda en `/etc/ctmanager/websocket/dominio` (se usa para 
 | Protocolo | Detección | Destino |
 |-----------|-----------|---------|
 | Psiphon | `SSH-2.0-Go` / `SSH-2.0-Psiphon` | psiphon_port |
-| SSH | `SSH-` | target_port |
+| SSH | `SSH-` | sshgo_port (2200) si está configurado, si no target_port |
 | V2Ray TLS | `0x16 0x03` | v2ray_port |
 | OpenVPN | `0x38/0x08/0x28` | ovpn_port |
 | WireGuard | `0x01 0x00 0x00 0x00` | wg_port |
 | V2Ray RAW | `0x00/0x01` | v2ray_port |
 
 El proxy también maneja payloads con `[split]` (2 bloques HTTP) — corta en el último `\r\n\r\n` para que el paquete del túnel llegue limpio al destino.
+
+
+## 🖥️ SSHGO — Banner dinámico en el log de HTTP Custom
+
+El instalador instala **sshgo** (servidor SSH en Go, binario estático) que autentica contra `ssh_users.db` y manda un **banner personalizado** en el handshake SSH. HTTP Custom lo muestra en su log al conectar:
+
+```
+✅ EPRO.HC ✅
+👤 USUARIO: prueba1
+📅 VENCE: 2026-09-21
+⏳ DÍAS: 29
+📊 TRÁFICO: 0.00 GB
+🎯 LÍMITE: 50 GB
+⚡ ESTADO: activo
+```
+
+- **Puerto**: `127.0.0.1:2200` (solo local — el proxy :80 lo alcanza, NO se abre al firewall)
+- **Plantilla editable**: `/etc/ctmanager/config/sshgo_banner.txt`
+  - Placeholders: `USER EXP DAYS TRF LIMIT` (estilo ADMRufu) + `{name} {expire} {days} {traffic} {limit} {status}`
+  - Soporta HTML: `<font color='green'>`, `<span style="background-color:...">`, `<b>`, `<br/>`
+  - ⚠️ HTTP Custom NO renderiza colores ANSI ni caracteres de caja (╔═╗█) — usar HTML o ASCII puro
+- **Editar banner**: `ghost-manager` → opción 19 (marca + idioma ES/EN/PT + color, o nano)
+- **NOTA**: el banner se ve en modo **SSH** (HTTP Custom muestra el banner del server). En modo Psiphon/V2Ray/OVPN HTTP Custom NO muestra banners del server (limitación de la app).
+
+## 🛠️ Ghost Manager — opciones nuevas
+
+| Opción | Función |
+|--------|---------|
+| 16 | 📊 Consumo por UUID VLESS (top conexiones desde los logs) |
+| 17 | 🗑️ Eliminar usuario VLESS (DB + Xray + links + mata conexiones) |
+| 18 | 📊 Consumo Psiphon por IP |
+| 19 | 🎨 Editar banner SSHGO (guiado: marca/idioma/color o nano) |
+
+## 🔧 Fixes importantes (2026-08-22)
+
+- **ulimit 65535** en pymanager/sshgo (antes 1024 → con grupos grandes de 1000+ personas se saturaba: "too many open files")
+- **getpeername en try** (fix error 107 en avalanchas de conexiones)
+- **Sin límite por UUID** en V2Ray (HTTP Custom abre 3-10 conexiones simultáneas con el mismo UUID — el límite las mataba)
+
+## 📋 Checkuser (endpoint listo)
+
+El panel web (`ghost-panel` repo privado) tiene `/checkuser` que responde DDMMYYYY (GET y POST). Si tu versión de HTTP Custom tiene checkuser (URL+puerto), configurá:
+`http://IP:8303/checkuser` · puerto `8303`
