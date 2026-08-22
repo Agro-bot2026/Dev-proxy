@@ -348,15 +348,34 @@ panel_web() {
     banner
     echo -e "${BOLD}${YELLOW}  🌐 PANEL WEB${NC}"
     echo -e "${CYAN}  ─────────────────────${NC}"
-    if systemctl is-active ghost-panel >/dev/null 2>&1; then
+    # Servicio nuevo (ghost-panel-web, Node) o viejo (ghost-panel)
+    if systemctl is-active ghost-panel-web >/dev/null 2>&1; then
+        echo -e "  🟢 ghost-panel-web: ${GREEN}✅ activo (puerto 8303)${NC}"
+        echo -e "  🔗 Admin:   http://$(get_ip):8303"
+        echo -e "  👤 WebView: http://$(get_ip):8303/webview?user=USUARIO"
+        echo -e "  ${YELLOW}  📌 WebView: configuralo en el perfil HTTP Custom del cliente${NC}"
+        echo -e "  ${YELLOW}     URL: http://$(get_ip):8303/webview?user=<su_usuario>${NC}"
+    elif systemctl is-active ghost-panel >/dev/null 2>&1; then
         echo -e "  🟢 ghost-panel: ${GREEN}✅ activo (puerto 8303)${NC}"
         echo -e "  🔗 http://$(get_ip):8303"
+        echo -e "  ${YELLOW}  ⚠️  Panel viejo — sin WebView. Instalá el nuevo:${NC}"
+        echo -e "  ${YELLOW}     bash <(curl -s https://raw.githubusercontent.com/Agro-bot2026/ghost-panel/main/webpanel-node/install-node-panel.sh)${NC}"
     else
-        echo -e "  🔴 ghost-panel: ${RED}❌ caído${NC}"
+        echo -e "  🔴 Panel web: ${RED}❌ no instalado${NC}"
+        echo -e "  ${YELLOW}  Para instalarlo (con WebView para clientes):${NC}"
+        echo -e "  ${YELLOW}     bash <(curl -s https://raw.githubusercontent.com/Agro-bot2026/ghost-panel/main/webpanel-node/install-node-panel.sh)${NC}"
+        echo ""
+        read -p "  ¿Instalarlo ahora? (s/N): " inst
+        if [[ "${inst,,}" == "s" || "${inst,,}" == "y" ]]; then
+            echo -e "  ${CYAN}  Instalando panel + WebView...${NC}"
+            bash <(curl -s https://raw.githubusercontent.com/Agro-bot2026/ghost-panel/main/webpanel-node/install-node-panel.sh) || echo -e "  ${RED}  ❌ Falló (¿repo privado? usá el repo clonado)${NC}"
+            echo -e "  ${GREEN}  ✅ Listo — panel activo en http://$(get_ip):8303${NC}"
+        fi
     fi
     echo ""
     read -p "  ⏎ Enter para continuar..."
 }
+
 
 # ─── Crear usuario Psiphon ───
 crear_psiphon() {
