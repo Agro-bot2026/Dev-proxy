@@ -123,7 +123,9 @@ write_config(){
   "wg_host": "127.0.0.1",
   "wg_port": 51821,
   "quota_gb": 200,
-  "quota_dias": 30
+  "quota_dias": 30,
+  "sshgo_host": "127.0.0.1",
+  "sshgo_port": 2200
 }
 EOF
     ok "Config creado: $CONFIG_FILE"
@@ -1307,6 +1309,8 @@ EOF
   fi
   # 6f) Ghost AI Help (mini asistente IA gratis)
   install_ai_help
+  # 6g) SSHGO — servidor SSH con banner dinámico (USER/EXP/DAYS/TRF/LIMIT)
+  install_sshgo
   # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -1526,6 +1530,72 @@ EOF
       fi
       ;;
   esac
+}
+
+
+# ─── SSHGO: servidor SSH con banner dinámico (USER/EXP/DAYS/TRF/LIMIT) ───
+install_sshgo(){
+  need_root
+  local SSHGO_BIN="/usr/local/bin/sshgo"
+  if [[ -x "$SSHGO_BIN" ]]; then
+    warn "sshgo ya existe (se conserva)"
+  else
+    warn "Descargando sshgo (banner dinámico SSH)..."
+    local url_ok=0
+    for url in \
+      "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/sshgo-linux-amd64" \
+      "https://github.com/Agro-bot2026/Dev-proxy/raw/main/sshgo-linux-amd64"; do
+      if download_file "$url" "$SSHGO_BIN" 2>/dev/null && [[ -s "$SSHGO_BIN" ]]; then
+        chmod 755 "$SSHGO_BIN"
+        url_ok=1
+        break
+      fi
+    done
+    if [[ $url_ok -eq 1 ]]; then
+      ok "sshgo descargado ($(du -h "$SSHGO_BIN" | cut -f1))"
+    else
+      warn "No pude bajar sshgo (banner dinámico NO activo — SSH sigue yendo al 22)"
+      return 0
+    fi
+  fi
+  # Servicio systemd (escucha SOLO en 127.0.0.1 — no se abre al firewall)
+  mkdir -p /etc/systemd/system
+  cat > /etc/systemd/system/sshgo.service <<EOF
+[Unit]
+Description=sshgo - servidor SSH con banner dinámico (USER/EXP/DAYS/TRF/LIMIT)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$SSHGO_BIN
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable sshgo >/dev/null 2>&1 || true
+  systemctl restart sshgo 2>/dev/null || true
+  if systemctl is-active --quiet sshgo; then
+    ok "sshgo ACTIVO en 127.0.0.1:2200 (SSH va al sshgo → banner en log HTTP Custom)"
+  else
+    warn "sshgo no arrancó — mirá journalctl -u sshgo"
+  fi
+  # Config: agregar sshgo_port (sin pisar el resto)
+  if [[ -f "$CONFIG_FILE" ]]; then
+    python3 - "$CONFIG_FILE" << 'PYEOF'
+import json, sys
+cfg_path = sys.argv[1]
+cfg = json.load(open(cfg_path))
+cfg['sshgo_host'] = '127.0.0.1'
+cfg['sshgo_port'] = 2200
+json.dump(cfg, open(cfg_path, 'w'), indent=2)
+PYEOF
+    systemctl restart "$SERVICE_NAME" 2>/dev/null || true
+    ok "config.json actualizado con sshgo_port=2200 + proxy reiniciado"
+  fi
 }
 
 # ─── Menú principal ───
