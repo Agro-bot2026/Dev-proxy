@@ -1374,15 +1374,16 @@ EOF
   echo
   # 9) Abrir TODOS los puertos del stack en el firewall (ufw/firewalld/iptables)
   open_all_ports
-  # 10) SSL 443 → proxy WS (método TLS tipo CloudRun) — si hay dominio
+  # 10) SSL 443 → proxy WS (método TLS tipo CloudRun) — se instala SOLO si hay dominio
+  #     (en modo interactivo pregunta; en pipeline [auto] se instala directo)
   if [[ -f "$DOMAIN_FILE" ]]; then
-    echo -e "  ${CYAN}🌐 ¿Instalar SSL 443 → proxy (método TLS)? [s/N]${NC}"
+    local q_tls="s"
     if [[ -t 0 ]]; then
+      echo -e "  ${CYAN}🌐 ¿Instalar SSL 443 → proxy (método TLS)? [S/n]${NC}"
       read -r -p "  → " q_tls
-    else
-      read -r -t 5 -p "  → " q_tls || q_tls="n"
+      [[ -z "$q_tls" ]] && q_tls="s"
     fi
-    if [[ "$q_tls" == "s" || "$q_tls" == "S" ]]; then
+    if [[ "$q_tls" == "s" || "$q_tls" == "S" || "$q_tls" == "y" || "$q_tls" == "Y" ]]; then
       install_tls_443
     fi
   fi
