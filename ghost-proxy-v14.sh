@@ -580,7 +580,6 @@ open_all_ports(){
   # NOTA: 2200 (sshgo) y 18999 (Brook) NO se abren — son solo 127.0.0.1 (los alcanza el :80)
   local puertos_tcp="80 22 2223 8443 1194 51820 20128 444 1080 3128 8388 5301"
   local puertos_udp="80 2223 8443 1194 51820 7300 8388"
-  local puertos_udp="80 2223 8443 1194 51820 7300"
 
   if has_cmd ufw; then
     # UFW (Debian/Ubuntu)
@@ -1713,6 +1712,9 @@ PYEOF
     systemctl restart "$SERVICE_NAME" 2>/dev/null || true
     ok "config.json actualizado con slowdns_port=5301 + proxy reiniciado"
   fi
+  # 7b) Abrir 5301 en firewall (bridge TCP — el 5300 UDP es interno, lo alcanza el bridge)
+  if has_cmd ufw; then ufw allow 5301/tcp >/dev/null 2>&1 || true; fi
+  if has_cmd firewall-cmd; then firewall-cmd --permanent --add-port=5301/tcp >/dev/null 2>&1 || true; firewall-cmd --reload >/dev/null 2>&1 || true; fi
   # 8) Mostrar datos del cliente
   local PUBKEY
   PUBKEY="$(cat "$SLDNS_DIR/server.pub" 2>/dev/null)"
