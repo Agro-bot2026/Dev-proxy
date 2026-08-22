@@ -1588,19 +1588,16 @@ EOF
     mkdir -p /etc/ctmanager/config
     cat > /etc/ctmanager/config/sshgo_banner.txt << 'BEOF'
 
-==========================================
-     G H O S T  -  V P N
-==========================================
-  USUARIO : {name}
-  VENCE   : {expire}
-  DIAS    : {days}
-  TRAFICO : {traffic} GB
-  LIMITE  : {limit} GB
-  ESTADO  : {status}
-==========================================
-  SU CONEXION ESTA PROTEGIDA
-==========================================
-
+════════════════════════════════════════════
+   E P R O . H C
+════════════════════════════════════════════
+<font color='green'>name: USER</font>
+<font color='blue'>expire: EXP</font>
+<font color='teal'>days: DAYS</font>
+<font color='teal'>traffic: TRF</font>
+<font color='teal'>limit: LIMIT</font>
+<font color='red'>status: {status}</font>
+════════════════════════════════════════════
 BEOF
     ok "Plantilla banner creada (editable en ghost-manager → 19)"
   fi
