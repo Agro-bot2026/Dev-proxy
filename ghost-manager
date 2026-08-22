@@ -583,6 +583,8 @@ menu() {
         echo -e "  ${BOLD}${FUCSIA}13${NC}) 📡 Ver conexiones en vivo"
         echo -e "  ${BOLD}${FUCSIA}14${NC}) 🤖 Ayuda IA (gratis, DeepSeek)"
         echo -e "  ${BOLD}${FUCSIA}15${NC}) 📊 Ver consumo de datos (cuota por IP)"
+        echo -e "  ${BOLD}${FUCSIA}16${NC}) 📊 Consumo por UUID VLESS (top conexiones)"
+        echo -e "  ${BOLD}${FUCSIA}17${NC}) 🗑️  Eliminar usuario VLESS"
         echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -602,6 +604,8 @@ menu() {
             13) ver_conexiones;;
             14) ghost-ai-help;;
             15) ver_consumo;;
+            16) ver_consumo_vless;;
+            17) eliminar_vless;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
@@ -775,6 +779,83 @@ print('Cuota actualizada a', '$nueva', 'GB')
     echo ""
     read -p "  ⏎ Enter para volver al menú..."
 }
+
+# ─── Ver consumo por UUID VLESS (desde logs del proxy) ───
+ver_consumo_vless() {
+    echo -e "${BOLD}${YELLOW}  📊 CONSUMO POR UUID VLESS${NC}"
+    echo -e "${CYAN}  ───────────────────────────────${NC}"
+    # Contar conexiones por UUID desde los logs de pymanager (últimas 24h)
+    local tmp=$(mktemp)
+    journalctl -u pymanager --since '24 hours ago' --no-pager 2>/dev/null | grep -oE 'uuid=[0-9a-f]{8}' | sort | uniq -c | sort -rn > "$tmp"
+    if [ ! -s "$tmp" ]; then
+        echo -e "  ${YELLOW}  ⚠️  Sin conexiones VLESS en las últimas 24h${NC}"
+    else
+        echo -e "  ${BOLD}  CONEXIONES  UUID       USUARIO"
+        echo -e "  ${CYAN}  ───────────────────────────────${NC}"
+        while read -r n uuid; do
+            local user
+            uuid_full=$(sqlite3 "$VDB" "SELECT uuid FROM users WHERE uuid LIKE '${uuid}%';" 2>/dev/null | head -1)
+            user=$(sqlite3 "$VDB" "SELECT username FROM users WHERE uuid='$uuid_full';" 2>/dev/null)
+            [ -z "$user" ] && user="(sin registrar)"
+            printf "  %-10s  %s   %s\n" "$n" "$uuid" "$user"
+        done < "$tmp"
+        echo -e "  ${CYAN}  ───────────────────────────────${NC}"
+    fi
+    rm -f "$tmp"
+    echo ""
+    read -p "  ⏎ Enter para volver al menú..."
+}
+
+# ─── Eliminar usuario VLESS (solo V2Ray) ───
+eliminar_vless() {
+    local user uuid
+    banner
+    echo -e "${BOLD}${RED}  🗑️  ELIMINAR USUARIO VLESS${NC}"
+    echo -e "${CYAN}  ────────────────────────${NC}"
+    # Listar usuarios VLESS actuales
+    echo -e "  ${BOLD}Usuarios VLESS registrados:${NC}"
+    echo ""
+    sqlite3 -separator ' | ' "$VDB" "SELECT username, substr(uuid,1,8), expires_at, activo FROM users ORDER BY username;" 2>/dev/null | while IFS=' | ' read -r u uu exp act; do
+        printf "  ${FUCSIA}%s${NC}  (UUID %s  exp: %s  activo: %s)\n" "$u" "$uu" "$exp" "$act"
+    done
+    echo ""
+    read -p "  👤 Nombre del usuario VLESS a eliminar: " user
+    [ -z "$user" ] && return
+
+    # Buscar su UUID en la DB
+    uuid=$(sqlite3 "$VDB" "SELECT uuid FROM users WHERE username='$user';" 2>/dev/null)
+    if [ -z "$uuid" ]; then
+        echo -e "  ${RED}  ❌ Usuario '$user' no encontrado en VLESS${NC}"
+        read -p "  ⏎ Enter para continuar..."
+        return
+    fi
+
+    # 1) Quitar de Xray (si existe el script)
+    if [ -x "$UUID_SH" ]; then
+        "$UUID_SH" remove "$uuid" 2>/dev/null && "$UUID_SH" reload 2>/dev/null
+        echo -e "  ${GREEN}  ✅ UUID quitado de Xray${NC}"
+    else
+        echo -e "  ${YELLOW}  ⚠️  xray_uuid.sh no existe — UUID no tocado en Xray${NC}"
+    fi
+
+    # 2) Borrar de la DB
+    sqlite3 "$VDB" "DELETE FROM users WHERE username='$user';" 2>/dev/null
+    echo -e "  ${GREEN}  ✅ Quitado de v2ray_users.db${NC}"
+
+    # 3) Borrar del archivo de links (por nombre Ghost-<user>)
+    if [ -f "$CFG_DIR/v2ray_links.txt" ]; then
+        grep -v "#Ghost-$user" "$CFG_DIR/v2ray_links.txt" > /tmp/links.tmp 2>/dev/null && mv /tmp/links.tmp "$CFG_DIR/v2ray_links.txt"
+        echo -e "  ${GREEN}  ✅ Link quitado de v2ray_links.txt${NC}"
+    fi
+
+    # 4) Matar sus conexiones activas (reinicia xray ya lo hizo, pero por si acaso)
+    pkill -f "$uuid" 2>/dev/null || true
+    echo ""
+    echo -e "  ${GREEN}  ✅ Usuario VLESS '$user' eliminado — acceso cortado${NC}"
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
 
 # ─── Inicio ───
 if [ "$EUID" -ne 0 ] && [ "$USER" != "root" ]; then
