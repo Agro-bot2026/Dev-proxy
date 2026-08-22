@@ -610,6 +610,7 @@ menu() {
         echo -e "  ${BOLD}${FUCSIA}21${NC}) 🕶️ Crear usuario Shadowsocks"
         echo -e "  ${BOLD}${FUCSIA}22${NC}) 🗑️ Eliminar usuario Shadowsocks"
         echo -e "  ${BOLD}${FUCSIA}23${NC}) 🐢 Datos SlowDNS (nameserver + pubkey)"
+        echo -e "  ${BOLD}${FUCSIA}24${NC}) 🐢 Crear usuario SlowDNS"
         echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -637,6 +638,7 @@ menu() {
             21) crear_shadowsocks;;
             22) eliminar_shadowsocks;;
             23) datos_slowdns;;
+            24) crear_slowdns;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
@@ -1180,6 +1182,64 @@ datos_slowdns() {
     echo ""
     echo -e "  ${YELLOW}  ⚠️  El dominio debe apuntar al VPS (registro NS o A).${NC}"
     echo -e "  ${YELLOW}  El nameserver se arma solo: sdns.<tu dominio>${NC}"
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+
+# ─── Crear usuario SlowDNS (crea el SSH + muestra nameserver/pubkey) ───
+crear_slowdns() {
+    local user dias expDate
+    banner
+    echo -e "${BOLD}${YELLOW}  🐢 CREAR USUARIO SLOWDNS${NC}"
+    echo -e "${CYAN}  ────────────────────────${NC}"
+    if [[ ! -x /etc/slowdns/sldns-server ]]; then
+        echo -e "  ${RED}  ❌ SlowDNS no instalado (corré el instalador opción 24)${NC}"
+        read -p "  ⏎ Enter para continuar..."
+        return
+    fi
+    read -p "  👤 Nombre (ej: juan): " user
+    [ -z "$user" ] && return
+    read -p "  ⏳ ¿Cuántos DÍAS dura? (ej 30): " dias
+    dias=${dias:-30}
+
+    # Crear el usuario SSH (el slowdns termina en SSH :22)
+    local pass
+    pass="$(openssl rand -hex 6)"
+    useradd -M -s /bin/false "$user" >/dev/null 2>&1 || true
+    echo "$user:$pass" | chpasswd >/dev/null 2>&1
+    chage -d "$(date +%Y-%m-%d)" "$user" >/dev/null 2>&1
+    expDate=$(date -d "+${dias} days" "+%Y-%m-%d %H:%M:%S")
+    chage -E "$expDate" "$user" >/dev/null 2>&1
+
+    # Guardar en la DB SSH (para checkuser/banner)
+    mkdir -p "$CFG_DIR"
+    sqlite3 /etc/ctmanager/config/ssh_users.db \
+      "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')), expires_at TEXT, activo INTEGER DEFAULT 1);" 2>/dev/null
+    sqlite3 /etc/ctmanager/config/ssh_users.db \
+      "INSERT OR REPLACE INTO users (username, password, expires_at) VALUES ('$user','$pass','$expDate');" 2>/dev/null
+
+    # Datos slowdns
+    local NS_DOMAIN PUBKEY IP
+    NS_DOMAIN="$(grep -oE 'ExecStart=.*' /etc/systemd/system/sldns-server.service 2>/dev/null | grep -oE 'sdns\.[^ ]+' | head -1)"
+    NS_DOMAIN="${NS_DOMAIN:-sdns.$(cat /etc/ctmanager/websocket/dominio 2>/dev/null)}"
+    PUBKEY="$(cat /etc/slowdns/server.pub 2>/dev/null)"
+    IP="$(get_ip)"
+
+    echo ""
+    echo -e "  ${GREEN}  ✅ ¡USUARIO SLOWDNS CREADO! Guardá estos datos:${NC}"
+    echo -e "  ${CYAN}  ────────────────────────────────${NC}"
+    echo -e "  ${BOLD}  Usuario: ${YELLOW}$user${NC}"
+    echo -e "  ${BOLD}  Password: ${YELLOW}$pass${NC}"
+    echo -e "  ${BOLD}  Expira: ${YELLOW}$expDate${NC}"
+    echo ""
+    echo -e "  ${BOLD}  📋 CONFIGURACIÓN HTTP CUSTOM (SlowDNS):${NC}"
+    echo -e "  ${CYAN}  Nameserver: ${NS_DOMAIN}"
+    echo -e "  ${CYAN}  Puerto: 80 (con payload) o ${IP}:5301 directo"
+    echo -e "  ${CYAN}  Pubkey: ${PUBKEY}${NC}"
+    echo -e "  ${CYAN}  Usuario: ${user}  ·  Password: ${pass}${NC}"
+    echo -e "  ${CYAN}  ────────────────────────────────${NC}"
+    echo -e "  ${YELLOW}  ⚠️  ${NS_DOMAIN} debe resolver a ${IP} (registro NS o A)${NC}"
     echo ""
     read -p "  ⏎ Enter para continuar..."
 }
