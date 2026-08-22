@@ -129,7 +129,8 @@ write_config(){
   "brook_host": "127.0.0.1",
   "brook_port": 18999,
   "dropbear_host": "127.0.0.1",
-  "dropbear_port": 444
+  "dropbear_port": 444,
+  "ss_port": 8388
 }
 EOF
     ok "Config creado: $CONFIG_FILE"
@@ -575,7 +576,8 @@ open_all_ports(){
   # Stack: 80 (proxy), 22 (SSH), 2223 (Psiphon), 8443 (Xray), 1194 (OpenVPN),
   # 51820 (WG), 20128 (9Router AI), 444 (Dropbear), 1080/3128 (Squid)
   # NOTA: 2200 (sshgo) y 18999 (Brook) NO se abren — son solo 127.0.0.1 (los alcanza el :80)
-  local puertos_tcp="80 22 2223 8443 1194 51820 20128 444 1080 3128"
+  local puertos_tcp="80 22 2223 8443 1194 51820 20128 444 1080 3128 8388"
+  local puertos_udp="80 2223 8443 1194 51820 7300 8388"
   local puertos_udp="80 2223 8443 1194 51820 7300"
 
   if has_cmd ufw; then
@@ -1323,6 +1325,8 @@ EOF
   # 6i) DROPBEAR — servidor SSH liviano (444) + SQUID — proxy HTTP (1080/3128)
   install_dropbear
   install_squid
+  # 6j) SHADOWSOCKS — proxy cifrado (xray inbound, directo :8388, sin zero-rating)
+  install_shadowsocks
   # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -1542,6 +1546,81 @@ EOF
       fi
       ;;
   esac
+}
+
+
+# ─── SHADOWSOCKS: proxy cifrado (xray inbound, puerto 8388) ───
+install_shadowsocks(){
+  need_root
+  if ! systemctl is-active --quiet xray 2>/dev/null; then
+    warn "xray no está activo — Shadowsocks necesita xray (corré la opción de Xray primero)"
+    return 0
+  fi
+  local SS_PASS SS_PORT
+  SS_PORT=8388
+  # Password aleatoria (o reutilizar si ya existe)
+  if [[ -f /etc/ctmanager/config/ss_password ]]; then
+    SS_PASS="$(cat /etc/ctmanager/config/ss_password 2>/dev/null)"
+  else
+    SS_PASS="$(openssl rand -hex 8 2>/dev/null || echo sspass123)"
+    echo "$SS_PASS" > /etc/ctmanager/config/ss_password
+    chmod 600 /etc/ctmanager/config/ss_password 2>/dev/null || true
+  fi
+  # Agregar inbound Shadowsocks al config de xray (idempotente)
+  python3 - "$SS_PORT" "$SS_PASS" << 'PYEOF'
+import json, sys
+port = int(sys.argv[1])
+passwd = sys.argv[2]
+path = '/usr/local/etc/xray/config.json'
+cfg = json.load(open(path))
+# Quitar inbound SS previo si existe
+cfg['inbounds'] = [i for i in cfg['inbounds'] if i.get('protocol') != 'shadowsocks']
+# Agregar inbound SS (público — el cliente se conecta directo, sin proxy :80)
+cfg['inbounds'].append({
+    "listen": "0.0.0.0",
+    "port": port,
+    "protocol": "shadowsocks",
+    "settings": {
+        "method": "aes-256-gcm",
+        "password": passwd,
+        "network": "tcp,udp"
+    }
+})
+json.dump(cfg, open(path, 'w'), indent=2)
+print(f"Inbound Shadowsocks configurado en :{port} (público)")
+PYEOF
+  systemctl restart xray 2>/dev/null || true
+  sleep 2
+  if ss -tlnp 2>/dev/null | grep -q ":$SS_PORT "; then
+    ok "Shadowsocks ACTIVO en :$SS_PORT (aes-256-gcm)"
+  else
+    warn "Shadowsocks no escucha — mirá journalctl -u xray"
+  fi
+  # Config del proxy: anotar (informativo)
+  if [[ -f "$CONFIG_FILE" ]]; then
+    python3 - "$CONFIG_FILE" << 'PYEOF'
+import json, sys
+cfg_path = sys.argv[1]
+cfg = json.load(open(cfg_path))
+cfg['ss_port'] = 8388
+json.dump(cfg, open(cfg_path, 'w'), indent=2)
+PYEOF
+  fi
+  # Abrir puerto en firewall (público — el cliente va directo)
+  if has_cmd ufw; then ufw allow "$SS_PORT/tcp" >/dev/null 2>&1 || true; ufw allow "$SS_PORT/udp" >/dev/null 2>&1 || true; fi
+  if has_cmd firewall-cmd; then
+    firewall-cmd --permanent --add-port="$SS_PORT/tcp" >/dev/null 2>&1 || true
+    firewall-cmd --permanent --add-port="$SS_PORT/udp" >/dev/null 2>&1 || true
+    firewall-cmd --reload >/dev/null 2>&1 || true
+  fi
+  ok "Firewall: $SS_PORT/tcp+udp abiertos"
+  # Mostrar link ss:// (sin IP — se muestra al final con el dominio)
+  echo ""
+  echo -e "  ${YELLOW}🔗 Link Shadowsocks (reemplazá IP):${NC}"
+  local B64
+  B64=$(printf "aes-256-gcm:%s" "$SS_PASS" | base64 -w0 2>/dev/null || printf "aes-256-gcm:%s" "$SS_PASS" | base64)
+  echo -e "  ${CYAN}ss://${B64}@IP:$SS_PORT#Ghost-SS${NC}"
+  echo -e "  ${YELLOW}  (HTTP Custom → Shadowsocks → server IP:$SS_PORT)${NC}"
 }
 
 
@@ -1884,6 +1963,7 @@ menu(){
     echo " [20] 🟦 Instalar Brook (proxy wsserver, opcional)"
     echo " [21] 🐻 Instalar Dropbear (SSH liviano :444)"
     echo " [22] 🕷️ Instalar Squid (proxy HTTP :1080/:3128)"
+    echo " [23] 🕶️ Instalar Shadowsocks (proxy cifrado :8388)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -1911,6 +1991,7 @@ menu(){
       20) install_brook; press_enter ;;
       21) install_dropbear; press_enter ;;
       22) install_squid; press_enter ;;
+      23) install_shadowsocks; press_enter ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac

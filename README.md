@@ -2,7 +2,7 @@
 
 Instalador automático con **menú completo para novatos**:
 
-**SSH · Psiphon · V2Ray · OpenVPN · WireGuard · UDP Custom · Brook · Dropbear · Squid**
+**SSH · Psiphon · V2Ray · OpenVPN · WireGuard · UDP Custom · Brook · Dropbear · Squid · Shadowsocks**
 
 ![Menú del script](menu-ghost-proxy-v3.png)
 
@@ -288,3 +288,15 @@ Proxy HTTP clásico para navegación:
 - **Puertos**: `1080` y `3128`
 - **Uso**: configurar el navegador/dispositivo con proxy `IP:3128` (o `1080`)
 - Instalar solo: `ghost-proxy-v14.sh` → opción 22
+
+
+## 🕶️ Shadowsocks (proxy cifrado :8388)
+
+Proxy cifrado clásico (inbound de Xray):
+
+- **Puerto**: `8388` (público — conexión directa, sin pasar por el :80)
+- **Método**: aes-256-gcm · **Password**: `/etc/ctmanager/config/ss_password`
+- **Link**: `ss://<base64>@IP:8388#Ghost-SS` (ghost-manager → opción 20)
+- **Uso**: HTTP Custom → Shadowsocks → server IP:8388
+- ⚠️ **Sin payload** — HTTP Custom no usa bughost en Shadowsocks y el protocolo no tiene firma detectable (cifrado desde byte 0), así que NO aplica zero-rating. Es un protocolo complementario (funciona en cualquier país, como Brook).
+- Instalar solo: `ghost-proxy-v14.sh` → opción 23

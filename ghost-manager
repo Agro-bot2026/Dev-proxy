@@ -606,6 +606,7 @@ menu() {
         echo -e "  ${BOLD}${FUCSIA}17${NC}) 🗑️  Eliminar usuario VLESS"
         echo -e "  ${BOLD}${FUCSIA}18${NC}) 📊 Consumo Psiphon por IP"
         echo -e "  ${BOLD}${FUCSIA}19${NC}) 🎨 Editar banner SSHGO"
+        echo -e "  ${BOLD}${FUCSIA}20${NC}) 🕶️ Link Shadowsocks (ss://)"
         echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -629,6 +630,7 @@ menu() {
             17) eliminar_vless;;
             18) ver_consumo_psiphon;;
             19) editar_banner;;
+            20) link_shadowsocks;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
@@ -1022,6 +1024,38 @@ BEOF
     read -p "  ⏎ Enter para volver al menú..."
 }
 
+
+
+# ─── Link Shadowsocks ───
+link_shadowsocks() {
+    banner
+    echo -e "${BOLD}${YELLOW}  🕶️  SHADOWSOCKS — LINK ss://${NC}"
+    echo -e "${CYAN}  ────────────────────────${NC}"
+    local SS_PASS SS_PORT IP
+    SS_PASS="$(cat /etc/ctmanager/config/ss_password 2>/dev/null)"
+    SS_PORT="$(python3 -c "import json; print(json.load(open('/etc/ctmanager/websocket/config.json')).get('ss_port', 8388))" 2>/dev/null)"
+    SS_PORT="${SS_PORT:-8388}"
+    if [[ -z "$SS_PASS" ]]; then
+        echo -e "  ${RED}  ❌ Shadowsocks no configurado (corré el instalador opción 23)${NC}"
+        read -p "  ⏎ Enter para continuar..."
+        return
+    fi
+    IP="$(get_ip)"
+    local B64
+    B64=$(printf "aes-256-gcm:%s" "$SS_PASS" | base64 -w0 2>/dev/null || printf "aes-256-gcm:%s" "$SS_PASS" | base64)
+    echo -e "  ${GREEN}  ✅ Shadowsocks activo en :${SS_PORT}${NC}"
+    echo ""
+    echo -e "  ${BOLD}🔗 LINK (para importar en HTTP Custom → Shadowsocks):${NC}"
+    echo -e "  ${CYAN}  ss://${B64}@${IP}:${SS_PORT}#Ghost-SS${NC}"
+    echo ""
+    echo -e "  ${YELLOW}  📌 Configuración manual en HTTP Custom:${NC}"
+    echo -e "  ${YELLOW}     Protocolo: Shadowsocks${NC}"
+    echo -e "  ${YELLOW}     Server: ${IP}  ·  Puerto: ${SS_PORT}${NC}"
+    echo -e "  ${YELLOW}     Password: ${SS_PASS}  ·  Método: aes-256-gcm${NC}"
+    echo -e "  ${YELLOW}  ⚠️  Sin payload — conexión directa (no usa zero-rating)${NC}"
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
 
 
 # ─── Inicio ───
