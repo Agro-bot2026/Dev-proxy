@@ -127,7 +127,9 @@ write_config(){
   "sshgo_host": "127.0.0.1",
   "sshgo_port": 2200,
   "brook_host": "127.0.0.1",
-  "brook_port": 18999
+  "brook_port": 18999,
+  "dropbear_host": "127.0.0.1",
+  "dropbear_port": 444
 }
 EOF
     ok "Config creado: $CONFIG_FILE"
@@ -1315,6 +1317,9 @@ EOF
   install_sshgo
   # 6h) BROOK — proxy wsserver (útil fuera de zero-rating, casi ningún script lo trae)
   install_brook
+  # 6i) DROPBEAR — servidor SSH liviano (444) + SQUID — proxy HTTP (1080/3128)
+  install_dropbear
+  install_squid
   # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -1537,6 +1542,158 @@ EOF
 }
 
 
+# ─── DROPBEAR: servidor SSH liviano (más conexiones, fingerprint distinta) ───
+install_dropbear(){
+  need_root
+  if has_cmd dropbear || command -v dropbear >/dev/null 2>&1 || [[ -f /usr/sbin/dropbear ]]; then
+    warn "dropbear ya instalado (se conserva)"
+  else
+    warn "Instalando dropbear (SSH liviano)..."
+    if has_cmd apt-get; then
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dropbear >/dev/null 2>&1 || true
+    elif has_cmd dnf; then
+      dnf install -y -q dropbear >/dev/null 2>&1 || true
+    elif has_cmd yum; then
+      yum install -y -q dropbear >/dev/null 2>&1 || true
+    elif has_cmd pacman; then
+      pacman -S --noconfirm dropbear >/dev/null 2>&1 || true
+    elif has_cmd zypper; then
+      zypper install -y dropbear >/dev/null 2>&1 || true
+    elif has_cmd apk; then
+      apk add dropbear >/dev/null 2>&1 || true
+    fi
+  fi
+  if ! command -v dropbear >/dev/null 2>&1 && [[ ! -f /usr/sbin/dropbear ]]; then
+    warn "No pude instalar dropbear (sin gestor de paquetes compatible)"
+    return 0
+  fi
+  # Puertos: 444 (dropbear clásico) — el 22 lo sigue usando OpenSSH
+  local DB_PORT="444"
+  # Crear dir de keys si no existe
+  mkdir -p /etc/dropbear
+  # Config systemd
+  cat > /etc/systemd/system/dropbear.service <<EOF
+[Unit]
+Description=Dropbear SSH Server (liviano) - puerto $DB_PORT
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/dropbear -p $DB_PORT -w -g -s
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable dropbear >/dev/null 2>&1 || true
+  systemctl restart dropbear 2>/dev/null || true
+  if systemctl is-active --quiet dropbear; then
+    ok "Dropbear ACTIVO en :$DB_PORT (SSH liviano)"
+  else
+    warn "dropbear no arrancó — mirá journalctl -u dropbear"
+  fi
+  # Config: agregar dropbear_port (destino SSH alternativo del proxy)
+  if [[ -f "$CONFIG_FILE" ]]; then
+    python3 - "$CONFIG_FILE" << 'PYEOF'
+import json, sys
+cfg_path = sys.argv[1]
+cfg = json.load(open(cfg_path))
+cfg['dropbear_host'] = '127.0.0.1'
+cfg['dropbear_port'] = 444
+json.dump(cfg, open(cfg_path, 'w'), indent=2)
+PYEOF
+    systemctl restart "$SERVICE_NAME" 2>/dev/null || true
+    ok "config.json actualizado con dropbear_port=444"
+  fi
+  # Abrir puerto
+  if has_cmd ufw; then ufw allow 444/tcp >/dev/null 2>&1 || true; fi
+  if has_cmd firewall-cmd; then firewall-cmd --permanent --add-port=444/tcp >/dev/null 2>&1 || true; firewall-cmd --reload >/dev/null 2>&1 || true; fi
+  # NOTA: el proxy :80 sigue mandando SSH al sshgo (banner). Para que SSH vaya a
+  # dropbear en vez de sshgo: editar config.json → sshgo_port: 0, dropbear_port: 444
+}
+
+# ─── SQUID: proxy HTTP (puertos 1080 y 3128) ───
+install_squid(){
+  need_root
+  if has_cmd squid || command -v squid >/dev/null 2>&1 || [[ -f /usr/sbin/squid ]]; then
+    warn "squid ya instalado (se conserva)"
+  else
+    warn "Instalando squid (proxy HTTP)..."
+    if has_cmd apt-get; then
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq squid >/dev/null 2>&1 || true
+    elif has_cmd dnf; then
+      dnf install -y -q squid >/dev/null 2>&1 || true
+    elif has_cmd yum; then
+      yum install -y -q squid >/dev/null 2>&1 || true
+    elif has_cmd pacman; then
+      pacman -S --noconfirm squid >/dev/null 2>&1 || true
+    elif has_cmd zypper; then
+      zypper install -y squid >/dev/null 2>&1 || true
+    elif has_cmd apk; then
+      apk add squid >/dev/null 2>&1 || true
+    fi
+  fi
+  local SQUID_BIN
+  SQUID_BIN="$(command -v squid 2>/dev/null || echo /usr/sbin/squid)"
+  if [[ ! -x "$SQUID_BIN" ]]; then
+    warn "No pude instalar squid (sin gestor de paquetes compatible)"
+    return 0
+  fi
+  # Config squid: escuchar en 1080 y 3128, transparente para la LAN
+  mkdir -p /etc/squid /var/cache/squid /var/log/squid
+  cat > /etc/squid/squid.conf << 'SQUIDEOF'
+# Squid config - Ghost Proxy (puertos 1080 y 3128)
+http_port 1080
+http_port 3128
+# Permitir todo (proxy abierto para clientes del VPS)
+acl all src all
+http_access allow all
+# Cache mínimo (proxy liviano)
+cache_dir ufs /var/cache/squid 100 16 256
+coredump_dir /var/cache/squid
+# Logs
+access_log /var/log/squid/access.log squid
+# No interceptar — proxy normal
+SQUIDEOF
+  # Algunas distros usan squid.conf con includes — respetar el formato básico
+  cat > /etc/systemd/system/squid-ghost.service <<EOF
+[Unit]
+Description=Squid Proxy HTTP (1080 y 3128)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$SQUID_BIN -f /etc/squid/squid.conf -N
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable squid-ghost >/dev/null 2>&1 || true
+  systemctl restart squid-ghost 2>/dev/null || true
+  sleep 2
+  if systemctl is-active --quiet squid-ghost; then
+    ok "Squid ACTIVO en :1080 y :3128 (proxy HTTP)"
+  else
+    warn "squid no arrancó — mirá journalctl -u squid-ghost"
+  fi
+  # Abrir puertos
+  if has_cmd ufw; then ufw allow 1080/tcp >/dev/null 2>&1 || true; ufw allow 3128/tcp >/dev/null 2>&1 || true; fi
+  if has_cmd firewall-cmd; then
+    firewall-cmd --permanent --add-port=1080/tcp >/dev/null 2>&1 || true
+    firewall-cmd --permanent --add-port=3128/tcp >/dev/null 2>&1 || true
+    firewall-cmd --reload >/dev/null 2>&1 || true
+  fi
+  ok "Squid: puertos 1080/3128 abiertos"
+}
+
+
 # ─── BROOK: proxy TCP/UDP estilo V2Ray (modo wsserver, útil fuera de zero-rating) ───
 install_brook(){
   need_root
@@ -1722,6 +1879,8 @@ menu(){
     echo " [18] 🔒 Instalar SSL 443 → proxy (método TLS)"
     echo " [19] 🔄 ACTUALIZAR Ghost Proxy (si hay versión nueva)"
     echo " [20] 🟦 Instalar Brook (proxy wsserver, opcional)"
+    echo " [21] 🐻 Instalar Dropbear (SSH liviano :444)"
+    echo " [22] 🕷️ Instalar Squid (proxy HTTP :1080/:3128)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -1747,6 +1906,8 @@ menu(){
       18) install_tls_443; press_enter ;;
       19) do_update ;;
       20) install_brook; press_enter ;;
+      21) install_dropbear; press_enter ;;
+      22) install_squid; press_enter ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac

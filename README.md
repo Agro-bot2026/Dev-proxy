@@ -2,7 +2,7 @@
 
 Instalador automático con **menú completo para novatos**:
 
-**SSH · Psiphon · V2Ray · OpenVPN · WireGuard · UDP Custom · Brook**
+**SSH · Psiphon · V2Ray · OpenVPN · WireGuard · UDP Custom · Brook · Dropbear · Squid**
 
 ![Menú del script](menu-ghost-proxy-v3.png)
 
@@ -211,6 +211,7 @@ El dominio del VPS se guarda en `/etc/ctmanager/websocket/dominio` (se usa para 
 | WireGuard | `0x01 0x00 0x00 0x00` | wg_port |
 | V2Ray RAW | `0x00/0x01` | v2ray_port |
 | Brook | `GET /ws` + `Upgrade: websocket` | brook_port (18999) |
+| SSH (dropbear) | `SSH-` si sshgo_port=0 y dropbear_port>0 | dropbear_port (444) |
 
 El proxy también maneja payloads con `[split]` (2 bloques HTTP) — corta en el último `\r\n\r\n` para que el paquete del túnel llegue limpio al destino.
 
@@ -269,3 +270,21 @@ El instalador incluye **Brook** (proxy TCP/UDP estilo V2Ray, modo `wsserver`) �
 - **Útil**: en países donde no aplica zero-rating, Brook funciona como VPN directa sin payload
 - ⚠️ La app oficial de Brook no tiene campo de payload → **sin zero-rating** (el método de bughost requiere HTTP Custom + payload). Por eso es un protocolo complementario, no reemplaza a los demás.
 - Instalar solo: `ghost-proxy-v14.sh` → opción 20
+
+
+## 🐻 Dropbear (SSH liviano :444)
+
+Servidor SSH liviano que soporta **más conexiones simultáneas** que OpenSSH y tiene fingerprint distinta:
+
+- **Puerto**: `444` (el 22 sigue siendo OpenSSH)
+- **Uso**: cuentas SSH directo a `IP:444` (o vía proxy :80 si desactivás sshgo)
+- **Alternar**: en `config.json`, `sshgo_port: 0` + `dropbear_port: 444` → el proxy manda SSH a dropbear
+- Instalar solo: `ghost-proxy-v14.sh` → opción 21
+
+## 🕷️ Squid (proxy HTTP :1080/:3128)
+
+Proxy HTTP clásico para navegación:
+
+- **Puertos**: `1080` y `3128`
+- **Uso**: configurar el navegador/dispositivo con proxy `IP:3128` (o `1080`)
+- Instalar solo: `ghost-proxy-v14.sh` → opción 22
