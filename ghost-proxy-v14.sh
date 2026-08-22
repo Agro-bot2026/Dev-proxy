@@ -130,7 +130,9 @@ write_config(){
   "brook_port": 18999,
   "dropbear_host": "127.0.0.1",
   "dropbear_port": 444,
-  "ss_port": 8388
+  "ss_port": 8388,
+  "slowdns_host": "127.0.0.1",
+  "slowdns_port": 5301
 }
 EOF
     ok "Config creado: $CONFIG_FILE"
@@ -576,7 +578,7 @@ open_all_ports(){
   # Stack: 80 (proxy), 22 (SSH), 2223 (Psiphon), 8443 (Xray), 1194 (OpenVPN),
   # 51820 (WG), 20128 (9Router AI), 444 (Dropbear), 1080/3128 (Squid)
   # NOTA: 2200 (sshgo) y 18999 (Brook) NO se abren — son solo 127.0.0.1 (los alcanza el :80)
-  local puertos_tcp="80 22 2223 8443 1194 51820 20128 444 1080 3128 8388"
+  local puertos_tcp="80 22 2223 8443 1194 51820 20128 444 1080 3128 8388 5301"
   local puertos_udp="80 2223 8443 1194 51820 7300 8388"
   local puertos_udp="80 2223 8443 1194 51820 7300"
 
@@ -1327,6 +1329,8 @@ EOF
   install_squid
   # 6j) SHADOWSOCKS — proxy cifrado (xray inbound, directo :8388, sin zero-rating)
   install_shadowsocks
+  # 6k) SLOWDNS — túnel SSH sobre DNS (sldns-server + socat, redireccionado al :80)
+  install_slowdns
   # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -1547,6 +1551,123 @@ EOF
       fi
       ;;
   esac
+}
+
+
+# ─── SLOWDNS: túnel SSH sobre DNS (sldns-server + socat puente) ───
+install_slowdns(){
+  need_root
+  local SLDNS_DIR="/etc/slowdns"
+  # 1) Descargar binarios
+  if [[ ! -x "$SLDNS_DIR/sldns-server" ]]; then
+    mkdir -p "$SLDNS_DIR"
+    warn "Descargando sldns-server + keys..."
+    local okd=1
+    curl -fsSL --max-time 40 "https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns/sldns-server" -o "$SLDNS_DIR/sldns-server" 2>/dev/null || okd=0
+    if [[ $okd -eq 1 ]]; then
+      chmod 755 "$SLDNS_DIR/sldns-server"
+      ok "sldns-server descargado"
+    else
+      warn "No pude bajar sldns-server (SlowDNS NO activo)"
+      return 0
+    fi
+  else
+    ok "sldns-server ya existe"
+  fi
+  # 2) Key propia (si no existe)
+  if [[ ! -f "$SLDNS_DIR/server.key" ]]; then
+    "$SLDNS_DIR/sldns-server" -gen-key -privkey-file "$SLDNS_DIR/server.key" -pubkey-file "$SLDNS_DIR/server.pub" >/dev/null 2>&1
+    chmod 600 "$SLDNS_DIR/server.key" 2>/dev/null || true
+    ok "Key ed25519 generada (server.key/pub)"
+  fi
+  # 3) socat (puente TCP -> UDP, porque el proxy :80 es TCP y sldns es UDP)
+  if ! has_cmd socat; then
+    if has_cmd apt-get; then DEBIAN_FRONTEND=noninteractive apt-get install -y -qq socat >/dev/null 2>&1 || true
+    elif has_cmd dnf; then dnf install -y -q socat >/dev/null 2>&1 || true
+    elif has_cmd yum; then yum install -y -q socat >/dev/null 2>&1 || true
+    elif has_cmd pacman; then pacman -S --noconfirm socat >/dev/null 2>&1 || true
+    elif has_cmd zypper; then zypper install -y socat >/dev/null 2>&1 || true
+    elif has_cmd apk; then apk add socat >/dev/null 2>&1 || true
+    fi
+  fi
+  if ! has_cmd socat; then
+    warn "socat no disponible — SlowDNS necesita socat (puente TCP→UDP)"
+    return 0
+  fi
+  # 4) Dominio nameserver (del archivo de dominio del VPS)
+  local NS_DOMAIN
+  NS_DOMAIN="$(cat /etc/ctmanager/websocket/dominio 2>/dev/null || cat "$DOMAIN_FILE" 2>/dev/null)"
+  if [[ -z "$NS_DOMAIN" ]]; then
+    warn "Sin dominio — el SlowDNS necesita un nameserver (dominio que apunte al VPS)"
+    return 0
+  fi
+  NS_DOMAIN="sdns.${NS_DOMAIN}"
+  # 5) Servicio sldns-server (UDP 5300 -> SSH 22)
+  cat > /etc/systemd/system/sldns-server.service <<EOF
+[Unit]
+Description=SlowDNS server (UDP 5300 -> SSH) - nameserver $NS_DOMAIN
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$SLDNS_DIR/sldns-server -udp :5300 -privkey-file $SLDNS_DIR/server.key $NS_DOMAIN 127.0.0.1:22
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  # 6) Servicio socat (TCP 5301 -> UDP 5300, lo alcanza el proxy :80)
+  cat > /etc/systemd/system/sldns-bridge.service <<EOF
+[Unit]
+Description=SlowDNS bridge (TCP 5301 -> UDP 5300)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat TCP-LISTEN:5301,reuseaddr,fork UDP:127.0.0.1:5300
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable sldns-server sldns-bridge >/dev/null 2>&1 || true
+  systemctl restart sldns-server sldns-bridge 2>/dev/null || true
+  sleep 2
+  if systemctl is-active --quiet sldns-server; then
+    ok "SlowDNS server ACTIVO (UDP :5300 -> SSH :22)"
+  else
+    warn "sldns-server no arrancó — mirá journalctl -u sldns-server"
+  fi
+  if systemctl is-active --quiet sldns-bridge; then
+    ok "SlowDNS bridge ACTIVO (TCP :5301 -> UDP :5300)"
+  fi
+  # 7) Config del proxy: slowdns_port
+  if [[ -f "$CONFIG_FILE" ]]; then
+    python3 - "$CONFIG_FILE" << 'PYEOF'
+import json, sys
+cfg_path = sys.argv[1]
+cfg = json.load(open(cfg_path))
+cfg['slowdns_host'] = '127.0.0.1'
+cfg['slowdns_port'] = 5301
+json.dump(cfg, open(cfg_path, 'w'), indent=2)
+PYEOF
+    systemctl restart "$SERVICE_NAME" 2>/dev/null || true
+    ok "config.json actualizado con slowdns_port=5301 + proxy reiniciado"
+  fi
+  # 8) Mostrar datos del cliente
+  local PUBKEY
+  PUBKEY="$(cat "$SLDNS_DIR/server.pub" 2>/dev/null)"
+  echo ""
+  echo -e "  ${YELLOW}📋 DATOS SLOWDNS (para HTTP Custom):${NC}"
+  echo -e "  ${CYAN}  Nameserver: $NS_DOMAIN"
+  echo -e "  ${CYAN}  Puerto: 80 (con payload) o 5301 directo"
+  echo -e "  ${CYAN}  Pubkey: $PUBKEY${NC}"
+  echo -e "  ${YELLOW}  (el dominio debe apuntar al VPS y usar el payload con bughost)${NC}"
 }
 
 
@@ -1972,6 +2093,7 @@ menu(){
     echo " [21] 🐻 Instalar Dropbear (SSH liviano :444)"
     echo " [22] 🕷️ Instalar Squid (proxy HTTP :1080/:3128)"
     echo " [23] 🕶️ Instalar Shadowsocks (proxy cifrado :8388)"
+    echo " [24] 🐢 Instalar SlowDNS (túnel SSH sobre DNS)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -2000,6 +2122,7 @@ menu(){
       21) install_dropbear; press_enter ;;
       22) install_squid; press_enter ;;
       23) install_shadowsocks; press_enter ;;
+      24) install_slowdns; press_enter ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac

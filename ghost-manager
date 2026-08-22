@@ -609,6 +609,7 @@ menu() {
         echo -e "  ${BOLD}${FUCSIA}20${NC}) 🕶️ Link Shadowsocks (ss://)"
         echo -e "  ${BOLD}${FUCSIA}21${NC}) 🕶️ Crear usuario Shadowsocks"
         echo -e "  ${BOLD}${FUCSIA}22${NC}) 🗑️ Eliminar usuario Shadowsocks"
+        echo -e "  ${BOLD}${FUCSIA}23${NC}) 🐢 Datos SlowDNS (nameserver + pubkey)"
         echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -635,6 +636,7 @@ menu() {
             20) link_shadowsocks;;
             21) crear_shadowsocks;;
             22) eliminar_shadowsocks;;
+            23) datos_slowdns;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
@@ -1150,6 +1152,34 @@ eliminar_shadowsocks() {
     fi
     sqlite3 /etc/ctmanager/config/ss_users.db "DELETE FROM users WHERE username='$user';" 2>/dev/null
     echo -e "  ${GREEN}  ✅ Usuario '$user' eliminado de la DB${NC}"
+    echo ""
+    read -p "  ⏎ Enter para continuar..."
+}
+
+
+# ─── Datos SlowDNS ───
+datos_slowdns() {
+    banner
+    echo -e "${BOLD}${YELLOW}  🐢 SLOWDNS — DATOS DEL CLIENTE${NC}"
+    echo -e "${CYAN}  ────────────────────────────${NC}"
+    if [[ ! -x /etc/slowdns/sldns-server ]]; then
+        echo -e "  ${RED}  ❌ SlowDNS no instalado (corré el instalador opción 24)${NC}"
+        read -p "  ⏎ Enter para continuar..."
+        return
+    fi
+    local NS_DOMAIN PUBKEY
+    NS_DOMAIN="$(grep -oE 'ExecStart=.*' /etc/systemd/system/sldns-server.service 2>/dev/null | grep -oE 'sdns\.[^ ]+' | head -1)"
+    NS_DOMAIN="${NS_DOMAIN:-sdns.$(cat /etc/ctmanager/websocket/dominio 2>/dev/null)}"
+    PUBKEY="$(cat /etc/slowdns/server.pub 2>/dev/null)"
+    echo -e "  ${GREEN}  ✅ SlowDNS activo (UDP :5300 → SSH, puente :5301)${NC}"
+    echo ""
+    echo -e "  ${BOLD}📋 Para HTTP Custom (protocolo SlowDNS):${NC}"
+    echo -e "  ${CYAN}  Nameserver: ${NS_DOMAIN}"
+    echo -e "  ${CYAN}  Puerto: 80 (con payload + bughost)"
+    echo -e "  ${CYAN}  Pubkey: ${PUBKEY}${NC}"
+    echo ""
+    echo -e "  ${YELLOW}  ⚠️  El dominio debe apuntar al VPS (registro NS o A).${NC}"
+    echo -e "  ${YELLOW}  El nameserver se arma solo: sdns.<tu dominio>${NC}"
     echo ""
     read -p "  ⏎ Enter para continuar..."
 }

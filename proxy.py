@@ -114,10 +114,14 @@ def detect_target(first_packet, cfg):
     psiphon_target = (cfg.get("psiphon_host", "127.0.0.1"), int(cfg.get("psiphon_port", 2223)))
     wg_target = (cfg.get("wg_host", "127.0.0.1"), int(cfg.get("wg_port", 51821)))
     brook_target = (cfg.get("brook_host", "127.0.0.1"), int(cfg.get("brook_port", 18999)))
+    slowdns_target = (cfg.get("slowdns_host", "127.0.0.1"), int(cfg.get("slowdns_port", 5301)))
     if first_packet:
         # 0) Brook wsserver (handshake WS: GET /ws + Upgrade)
         if es_handshake_brook(first_packet):
             return brook_target
+        # 0b) SlowDNS (query DNS: flags 0x0100 + QDCOUNT 0x0001 en bytes 2-5)
+        if len(first_packet) >= 6 and first_packet[2:4] == b"\x01\x00" and first_packet[4:6] == b"\x00\x01":
+            return slowdns_target
         # 1) Psiphon
         if first_packet.startswith(b"SSH-2.0-Go") or first_packet.startswith(b"SSH-2.0-Psiphon"):
             return psiphon_target

@@ -2,7 +2,7 @@
 
 Instalador automático con **menú completo para novatos**:
 
-**SSH · Psiphon · V2Ray · OpenVPN · WireGuard · UDP Custom · Brook · Dropbear · Squid · Shadowsocks**
+**SSH · Psiphon · V2Ray · OpenVPN · WireGuard · UDP Custom · Brook · Dropbear · Squid · Shadowsocks · SlowDNS**
 
 ![Menú del script](menu-ghost-proxy-v3.png)
 
@@ -302,3 +302,17 @@ Proxy cifrado clásico (inbound de Xray):
 - Instalar solo: `ghost-proxy-v14.sh` → opción 23
 - **Usuarios individuales** (como VLESS): ghost-manager → opción 21 (crear, genera password+link) y 22 (eliminar, corta acceso)
 - **DB**: `/etc/ctmanager/config/ss_users.db` · **Script**: `ss_users.sh` (add/remove/list/reload)
+
+
+## 🐢 SlowDNS (túnel SSH sobre DNS)
+
+Túnel SSH que funciona a través de consultas DNS (útil donde el DNS no está bloqueado):
+
+- **Server**: `sldns-server` UDP :5300 → SSH :22 (binarios + key ed25519 propia)
+- **Bridge**: socat TCP :5301 → UDP :5300 (el proxy :80 es TCP, sldns es UDP)
+- **Detección en el proxy**: query DNS (flags 0x0100 + QDCOUNT 0x0001) → slowdns_port (5301)
+- **Nameserver**: `sdns.<tu dominio>` (el dominio debe apuntar al VPS)
+- **Pubkey**: `/etc/slowdns/server.pub`
+- **Uso**: HTTP Custom → SlowDNS → nameserver + puerto 80 (con payload) + pubkey
+- **Datos**: ghost-manager → opción 23
+- Instalar solo: `ghost-proxy-v14.sh` → opción 24
