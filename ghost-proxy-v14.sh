@@ -1583,6 +1583,28 @@ EOF
   else
     warn "sshgo no arrancó — mirá journalctl -u sshgo"
   fi
+  # Plantilla del banner (solo si no existe — no pisar personalizaciones)
+  if [[ ! -f /etc/ctmanager/config/sshgo_banner.txt ]]; then
+    mkdir -p /etc/ctmanager/config
+    cat > /etc/ctmanager/config/sshgo_banner.txt << 'BEOF'
+
+╔══════════════════════════════════════╗
+║      ██████  ███████  ██████  ██   ██║
+║        ██   ██      ██       ██   ██║
+║        ██   ███████  ██████  ██   ██║
+║        ██        ██       ██ ██   ██║
+║        ██   ███████  ██████   █████ ║
+╠══════════════════════════════════════╣
+║  USUARIO : {name}
+║  VENCE   : {expire}
+║  DIAS    : {days}
+║  TRAFICO : {traffic} GB
+║  LIMITE  : {limit} GB
+║  ESTADO  : {status}
+╚══════════════════════════════════════╝
+BEOF
+    ok "Plantilla banner creada (editable en ghost-manager → 19)"
+  fi
   # Config: agregar sshgo_port (sin pisar el resto)
   if [[ -f "$CONFIG_FILE" ]]; then
     python3 - "$CONFIG_FILE" << 'PYEOF'

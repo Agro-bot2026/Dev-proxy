@@ -586,6 +586,7 @@ menu() {
         echo -e "  ${BOLD}${FUCSIA}16${NC}) 📊 Consumo por UUID VLESS (top conexiones)"
         echo -e "  ${BOLD}${FUCSIA}17${NC}) 🗑️  Eliminar usuario VLESS"
         echo -e "  ${BOLD}${FUCSIA}18${NC}) 📊 Consumo Psiphon por IP"
+        echo -e "  ${BOLD}${FUCSIA}19${NC}) 🎨 Editar banner SSHGO"
         echo -e "  ${BOLD}${FUCSIA}0${NC}) Salir"
         echo ""
         read -p "  ➤ Opción: " op
@@ -608,6 +609,7 @@ menu() {
             16) ver_consumo_vless;;
             17) eliminar_vless;;
             18) ver_consumo_psiphon;;
+            19) editar_banner;;
             0) echo -e "${GREEN}  👋 Hasta luego!${NC}"; exit 0;;
             *) echo -e "${RED}  ❌ Opción inválida${NC}"; sleep 1;;
         esac
@@ -878,6 +880,73 @@ ver_consumo_psiphon() {
     echo -e "  ${CYAN}  ────────────────────────────────${NC}"
     echo -e "  ${YELLOW}  ℹ️  Psiphon usa un server entry único — el rastreo es por IP,${NC}"
     echo -e "  ${YELLOW}     no por usuario (no hay UUIDs individuales).${NC}"
+    echo ""
+    read -p "  ⏎ Enter para volver al menú..."
+}
+
+
+# ─── Editar banner del sshgo ───
+editar_banner() {
+    banner
+    echo -e "${BOLD}${YELLOW}  🎨 EDITAR BANNER SSHGO${NC}"
+    echo -e "${CYAN}  ──────────────────────────${NC}"
+    local BANNER="/etc/ctmanager/config/sshgo_banner.txt"
+    if [[ ! -f "$BANNER" ]]; then
+        echo -e "  ${YELLOW}  ⚠️  sshgo no instalado o sin plantilla${NC}"
+        echo -e "  ${YELLOW}  El banner solo aplica si sshgo está activo (opción 1 del instalador)${NC}"
+        read -p "  ⏎ Enter para continuar..."
+        return
+    fi
+    echo -e "  ${BOLD}Placeholders disponibles:${NC}"
+    echo -e "  ${CYAN}  {name}    → nombre del usuario"
+    echo -e "  ${CYAN}  {expire}  → fecha de vencimiento"
+    echo -e "  ${CYAN}  {days}    → días restantes"
+    echo -e "  ${CYAN}  {traffic} → tráfico consumido (GB)"
+    echo -e "  ${CYAN}  {limit}   → límite de tráfico (GB)"
+    echo -e "  ${CYAN}  {status}  → activo / VENCIDO"
+    echo -e "  ${YELLOW}  💡 Usá caracteres especiales (═ ░ █) — HTTP Custom NO muestra"
+    echo -e "  ${YELLOW}     colores ANSI ni emojis (salen como texto crudo o tofu)${NC}"
+    echo ""
+    echo -e "  ${BOLD}Opciones:${NC}"
+    echo -e "  ${FUCSIA}1${NC}) Editar plantilla (nano)"
+    echo -e "  ${FUCSIA}2${NC}) Ver ejemplo actual (con datos reales)"
+    echo -e "  ${FUCSIA}3${NC}) Restaurar plantilla default (GHOST)"
+    echo -e "  ${FUCSIA}4${NC}) Volver"
+    read -p "  ➤ Opción: " bo
+    case "$bo" in
+        1) nano "$BANNER"; systemctl restart sshgo 2>/dev/null || true; echo -e "  ${GREEN}✅ Plantilla guardada + sshgo reiniciado${NC}";;
+        2)
+            # Mostrar ejemplo con datos fake
+            local demo
+            demo=$(sed -e "s/{name}/demo_user/" -e "s/{expire}/2026-12-31/" -e "s/{days}/131/" -e "s/{traffic}/12.50/" -e "s/{limit}/50/" -e "s/{status}/activo/" "$BANNER")
+            echo -e "  ${BOLD}Así se vería:${NC}"
+            echo -e "${CYAN}  ──────────────${NC}"
+            echo "$demo"
+            echo -e "${CYAN}  ──────────────${NC}"
+            ;;
+        3)
+            cat > "$BANNER" << 'BEOF'
+
+╔══════════════════════════════════════╗
+║      ██████  ███████  ██████  ██   ██║
+║        ██   ██      ██       ██   ██║
+║        ██   ███████  ██████  ██   ██║
+║        ██        ██       ██ ██   ██║
+║        ██   ███████  ██████   █████ ║
+╠══════════════════════════════════════╣
+║  USUARIO : {name}
+║  VENCE   : {expire}
+║  DIAS    : {days}
+║  TRAFICO : {traffic} GB
+║  LIMITE  : {limit} GB
+║  ESTADO  : {status}
+╚══════════════════════════════════════╝
+BEOF
+            systemctl restart sshgo 2>/dev/null || true
+            echo -e "  ${GREEN}✅ Plantilla GHOST restaurada${NC}"
+            ;;
+        *) return;;
+    esac
     echo ""
     read -p "  ⏎ Enter para volver al menú..."
 }
