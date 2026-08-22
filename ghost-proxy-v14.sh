@@ -1546,9 +1546,10 @@ install_brook(){
   else
     warn "Descargando brook (wsserver)..."
     local url_ok=0
+    # El binario vive en el GitHub RELEASE (el repo raw lo bloquea el secret scanning de GitHub)
     for url in \
-      "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/brook-linux-amd64" \
-      "https://github.com/Agro-bot2026/Dev-proxy/raw/main/brook-linux-amd64"; do
+      "https://github.com/Agro-bot2026/Dev-proxy/releases/download/brook-v1/brook-linux-amd64" \
+      "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/brook-linux-amd64"; do
       if download_file "$url" "$BROOK_BIN" 2>/dev/null && [[ -s "$BROOK_BIN" ]]; then
         chmod 755 "$BROOK_BIN"
         url_ok=1
