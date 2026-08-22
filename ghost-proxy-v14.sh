@@ -1587,14 +1587,13 @@ EOF
   if [[ ! -f /etc/ctmanager/config/sshgo_banner.txt ]]; then
     mkdir -p /etc/ctmanager/config
     cat > /etc/ctmanager/config/sshgo_banner.txt << 'BEOF'
-<span style="background-color: #00ff00;"><font color="#000000"><b>✅ EPRO.HC ✅</b></font></span>
-<font color='green'>name: USER</font>
-<font color='blue'>expire: EXP</font>
-<font color='teal'>days: DAYS</font>
-<font color='teal'>traffic: TRF</font>
-<font color='teal'>limit: LIMIT</font>
-<font color='red'>status: {status}</font>
-════════════════════════════════════════════
+<span style="background-color: #000000;"><font color="#ff8c00"><b>✅ EPRO.HC ✅</b></font></span><br/>
+<font color='green'><b>👤 USUARIO:</b> USER</font><br/>
+<font color='blue'><b>📅 VENCE:</b> EXP</font><br/>
+<font color='teal'><b>⏳ DÍAS:</b> DAYS</font><br/>
+<font color='teal'><b>📊 TRÁFICO:</b> TRF GB</font><br/>
+<font color='teal'><b>🎯 LÍMITE:</b> LIMIT GB</font><br/>
+<font color='red'><b>⚡ ESTADO:</b> {status}</font>
 BEOF
     ok "Plantilla banner creada (editable en ghost-manager → 19)"
   fi
