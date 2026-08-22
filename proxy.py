@@ -106,6 +106,9 @@ def detect_target(first_packet, cfg):
     sshgo_port = int(cfg.get("sshgo_port", 0) or 0)
     if sshgo_port:
         ssh_target = (cfg.get("sshgo_host", "127.0.0.1"), sshgo_port)
+    # Si no hay sshgo pero sí dropbear, el SSH va a dropbear (SSH liviano)
+    elif int(cfg.get("dropbear_port", 0) or 0):
+        ssh_target = (cfg.get("dropbear_host", "127.0.0.1"), int(cfg.get("dropbear_port", 444)))
     ovpn_target = (cfg.get("ovpn_host", "127.0.0.1"), int(cfg.get("ovpn_port", 1194)))
     v2ray_target = (cfg.get("v2ray_host", "127.0.0.1"), int(cfg.get("v2ray_port", 8443)))
     psiphon_target = (cfg.get("psiphon_host", "127.0.0.1"), int(cfg.get("psiphon_port", 2223)))
