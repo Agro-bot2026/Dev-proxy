@@ -926,12 +926,7 @@ editar_banner() {
             ;;
         3)
             cat > "$BANNER" << 'BEOF'
-
-<font color='orange'>
- █▀▀▀ █▀▀█ █▀▀█ █▀▀▀█ ░ █░▒█ █▀▀█
- █▀▀▀ █▄▄█ █▄▄▀ █░░▒█ ░ █▀▀█ █░░░
- █▄▄▄ █░░░ █░▒█ █▄▄▄█ █ █░▒█ █▄▄█
-</font>
+<span style="background-color: #00ff00;"><font color="#000000"><b>✅ EPRO.HC ✅</b></font></span>
 <font color='green'>name: USER</font>
 <font color='blue'>expire: EXP</font>
 <font color='teal'>days: DAYS</font>

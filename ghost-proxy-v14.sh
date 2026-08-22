@@ -1587,12 +1587,7 @@ EOF
   if [[ ! -f /etc/ctmanager/config/sshgo_banner.txt ]]; then
     mkdir -p /etc/ctmanager/config
     cat > /etc/ctmanager/config/sshgo_banner.txt << 'BEOF'
-
-<font color='orange'>
- █▀▀▀ █▀▀█ █▀▀█ █▀▀▀█ ░ █░▒█ █▀▀█
- █▀▀▀ █▄▄█ █▄▄▀ █░░▒█ ░ █▀▀█ █░░░
- █▄▄▄ █░░░ █░▒█ █▄▄▄█ █ █░▒█ █▄▄█
-</font>
+<span style="background-color: #00ff00;"><font color="#000000"><b>✅ EPRO.HC ✅</b></font></span>
 <font color='green'>name: USER</font>
 <font color='blue'>expire: EXP</font>
 <font color='teal'>days: DAYS</font>
