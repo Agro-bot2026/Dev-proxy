@@ -885,46 +885,106 @@ ver_consumo_psiphon() {
 }
 
 
-# ─── Editar banner del sshgo ───
+# ─── Editar banner del sshgo (editor guiado) ───
 editar_banner() {
+    local BANNER="/etc/ctmanager/config/sshgo_banner.txt"
     banner
     echo -e "${BOLD}${YELLOW}  🎨 EDITAR BANNER SSHGO${NC}"
     echo -e "${CYAN}  ──────────────────────────${NC}"
-    local BANNER="/etc/ctmanager/config/sshgo_banner.txt"
     if [[ ! -f "$BANNER" ]]; then
         echo -e "  ${YELLOW}  ⚠️  sshgo no instalado o sin plantilla${NC}"
         echo -e "  ${YELLOW}  El banner solo aplica si sshgo está activo (opción 1 del instalador)${NC}"
         read -p "  ⏎ Enter para continuar..."
         return
     fi
-    echo -e "  ${BOLD}Placeholders disponibles:${NC}"
-    echo -e "  ${CYAN}  {name}    → nombre del usuario"
-    echo -e "  ${CYAN}  {expire}  → fecha de vencimiento"
-    echo -e "  ${CYAN}  {days}    → días restantes"
-    echo -e "  ${CYAN}  {traffic} → tráfico consumido (GB)"
-    echo -e "  ${CYAN}  {limit}   → límite de tráfico (GB)"
-    echo -e "  ${CYAN}  {status}  → activo / VENCIDO"
-    echo -e "  ${YELLOW}  💡 Usá caracteres especiales (═ ░ █) — HTTP Custom NO muestra"
-    echo -e "  ${YELLOW}     colores ANSI ni emojis (salen como texto crudo o tofu)${NC}"
+    echo -e "  ${BOLD}Placeholders (se reemplazan solos):${NC}"
+    echo -e "  ${CYAN}  USER  → nombre     EXP → vencimiento   DAYS → días"
+    echo -e "  ${CYAN}  TRF   → tráfico    LIMIT → límite      {status} → activo/VENCIDO"
     echo ""
     echo -e "  ${BOLD}Opciones:${NC}"
-    echo -e "  ${FUCSIA}1${NC}) Editar plantilla (nano)"
-    echo -e "  ${FUCSIA}2${NC}) Ver ejemplo actual (con datos reales)"
-    echo -e "  ${FUCSIA}3${NC}) Restaurar plantilla default (GHOST)"
-    echo -e "  ${FUCSIA}4${NC}) Volver"
+    echo -e "  ${FUCSIA}1${NC}) ✨ Generar plantilla guiada (marca + idioma + color)"
+    echo -e "  ${FUCSIA}2${NC}) ✏️  Editar plantilla a mano (nano)"
+    echo -e "  ${FUCSIA}3${NC}) 👁️  Ver ejemplo actual (con datos reales)"
+    echo -e "  ${FUCSIA}4${NC}) 🔄 Restaurar plantilla default (EPRO.HC)"
+    echo -e "  ${FUCSIA}0${NC}) Volver"
     read -p "  ➤ Opción: " bo
     case "$bo" in
-        1) nano "$BANNER"; systemctl restart sshgo 2>/dev/null || true; echo -e "  ${GREEN}✅ Plantilla guardada + sshgo reiniciado${NC}";;
+        1)
+            local marca idioma color hex_color
+            read -p "  🏷️  Marca a mostrar (ej: EPRO.HC, MI-VPN, LA RED): " marca
+            marca="${marca:-EPRO.HC}"
+            echo -e "  🌐 Idioma de las etiquetas:"
+            echo -e "    ${FUCSIA}1${NC}) Español (USUARIO/VENCE/DÍAS/TRÁFICO/LÍMITE/ESTADO)"
+            echo -e "    ${FUCSIA}2${NC}) English (USER/EXPIRE/DAYS/TRAFFIC/LIMIT/STATUS)"
+            echo -e "    ${FUCSIA}3${NC}) Português (USUÁRIO/VENCE/DIAS/TRÁFEGO/LIMITE/ESTADO)"
+            read -p "  ➤ Idioma [1]: " idioma
+            idioma="${idioma:-1}"
+            echo -e "  🎨 Color del título (naranja=1, verde=2, azul=3, rojo=4, amarillo=5, blanco=6):"
+            read -p "  ➤ Color [1]: " color
+            color="${color:-1}"
+            case "$color" in
+                1) hex_color="#ff8c00";;
+                2) hex_color="#00ff00";;
+                3) hex_color="#00bfff";;
+                4) hex_color="#ff0000";;
+                5) hex_color="#ffff00";;
+                6) hex_color="#ffffff";;
+                *) hex_color="#ff8c00";;
+            esac
+            # Generar plantilla según idioma
+            case "$idioma" in
+                2)
+                    cat > "$BANNER" << BEOF
+<span style="background-color: #000000;"><font color="${hex_color}"><b>✅ ${marca} ✅</b></font></span><br/>
+<font color='green'><b>👤 USER:</b> USER</font><br/>
+<font color='blue'><b>📅 EXPIRE:</b> EXP</font><br/>
+<font color='teal'><b>⏳ DAYS:</b> DAYS</font><br/>
+<font color='teal'><b>📊 TRAFFIC:</b> TRF GB</font><br/>
+<font color='teal'><b>🎯 LIMIT:</b> LIMIT GB</font><br/>
+<font color='red'><b>⚡ STATUS:</b> {status}</font>
+BEOF
+                    ;;
+                3)
+                    cat > "$BANNER" << BEOF
+<span style="background-color: #000000;"><font color="${hex_color}"><b>✅ ${marca} ✅</b></font></span><br/>
+<font color='green'><b>👤 USUÁRIO:</b> USER</font><br/>
+<font color='blue'><b>📅 VENCE:</b> EXP</font><br/>
+<font color='teal'><b>⏳ DIAS:</b> DAYS</font><br/>
+<font color='teal'><b>📊 TRÁFEGO:</b> TRF GB</font><br/>
+<font color='teal'><b>🎯 LIMITE:</b> LIMIT GB</font><br/>
+<font color='red'><b>⚡ ESTADO:</b> {status}</font>
+BEOF
+                    ;;
+                *)
+                    cat > "$BANNER" << BEOF
+<span style="background-color: #000000;"><font color="${hex_color}"><b>✅ ${marca} ✅</b></font></span><br/>
+<font color='green'><b>👤 USUARIO:</b> USER</font><br/>
+<font color='blue'><b>📅 VENCE:</b> EXP</font><br/>
+<font color='teal'><b>⏳ DÍAS:</b> DAYS</font><br/>
+<font color='teal'><b>📊 TRÁFICO:</b> TRF GB</font><br/>
+<font color='teal'><b>🎯 LÍMITE:</b> LIMIT GB</font><br/>
+<font color='red'><b>⚡ ESTADO:</b> {status}</font>
+BEOF
+                    ;;
+            esac
+            systemctl restart sshgo 2>/dev/null || true
+            echo -e "  ${GREEN}✅ Plantilla generada: marca '${marca}' | idioma ${idioma} | color ${hex_color}${NC}"
+            echo -e "  ${GREEN}   sshgo reiniciado — probá conectando un usuario${NC}"
+            ;;
         2)
-            # Mostrar ejemplo con datos fake
+            nano "$BANNER"
+            systemctl restart sshgo 2>/dev/null || true
+            echo -e "  ${GREEN}✅ Plantilla guardada + sshgo reiniciado${NC}"
+            ;;
+        3)
             local demo
-            demo=$(sed -e "s/{name}/demo_user/" -e "s/{expire}/2026-12-31/" -e "s/{days}/131/" -e "s/{traffic}/12.50/" -e "s/{limit}/50/" -e "s/{status}/activo/" "$BANNER")
+            demo=$(sed -e "s/USER/demo_user/g" -e "s/EXP/2026-12-31/" -e "s/DAYS/131/" -e "s/TRF/12.50/" -e "s/LIMIT/50/" -e "s/{status}/activo/" "$BANNER")
             echo -e "  ${BOLD}Así se vería:${NC}"
             echo -e "${CYAN}  ──────────────${NC}"
             echo "$demo"
             echo -e "${CYAN}  ──────────────${NC}"
             ;;
-        3)
+        4)
             cat > "$BANNER" << 'BEOF'
 <span style="background-color: #000000;"><font color="#ff8c00"><b>✅ EPRO.HC ✅</b></font></span><br/>
 <font color='green'><b>👤 USUARIO:</b> USER</font><br/>
@@ -935,13 +995,14 @@ editar_banner() {
 <font color='red'><b>⚡ ESTADO:</b> {status}</font>
 BEOF
             systemctl restart sshgo 2>/dev/null || true
-            echo -e "  ${GREEN}✅ Plantilla GHOST restaurada${NC}"
+            echo -e "  ${GREEN}✅ Plantilla EPRO.HC restaurada${NC}"
             ;;
         *) return;;
     esac
     echo ""
     read -p "  ⏎ Enter para volver al menú..."
 }
+
 
 
 # ─── Inicio ───
