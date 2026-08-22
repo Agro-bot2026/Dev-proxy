@@ -1594,14 +1594,68 @@ install_slowdns(){
     warn "socat no disponible — SlowDNS necesita socat (puente TCP→UDP)"
     return 0
   fi
-  # 4) Dominio nameserver (del archivo de dominio del VPS)
-  local NS_DOMAIN
-  NS_DOMAIN="$(cat /etc/ctmanager/websocket/dominio 2>/dev/null || cat "$DOMAIN_FILE" 2>/dev/null)"
-  if [[ -z "$NS_DOMAIN" ]]; then
+  # 4) Dominio nameserver — pedir/armar como hace el SSL (sdns.<dominio>)
+  local NS_DOMAIN NS_BASE
+  NS_BASE="$(cat /etc/ctmanager/websocket/dominio 2>/dev/null || cat "$DOMAIN_FILE" 2>/dev/null || true)"
+  if [[ -z "$NS_BASE" && -t 0 ]]; then
+    echo ""
+    read -r -p "  🌐 Dominio para SlowDNS? (ej: chauinforme.online, debe apuntar al VPS): " NS_BASE
+    NS_BASE="$(echo "$NS_BASE" | tr -d ' ' | sed 's|https\?://||')"
+    if [[ -n "$NS_BASE" ]]; then
+      mkdir -p "$INSTALL_DIR"
+      echo "$NS_BASE" > "$DOMAIN_FILE"
+      ok "Dominio guardado: $NS_BASE"
+    fi
+  fi
+  if [[ -z "$NS_BASE" ]]; then
     warn "Sin dominio — el SlowDNS necesita un nameserver (dominio que apunte al VPS)"
     return 0
   fi
-  NS_DOMAIN="sdns.${NS_DOMAIN}"
+  NS_DOMAIN="sdns.${NS_BASE}"
+  # 4b) Crear registro A en Cloudflare si hay token; si no, mostrar instrucciones
+  local CF_TOKEN
+  CF_TOKEN="$(cat /etc/ctmanager/cloudflare_token 2>/dev/null || echo '')"
+  if [[ -n "$CF_TOKEN" ]]; then
+    warn "Token Cloudflare encontrado — creando registro A $NS_DOMAIN..."
+    local IP_PUB
+    IP_PUB="$(get_ip)"
+    python3 - "$CF_TOKEN" "$NS_BASE" "$NS_DOMAIN" "$IP_PUB" << 'PYEOF'
+import json, sys, urllib.request
+token, base, ns, ip = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+try:
+    # Buscar zone id
+    req = urllib.request.Request(f"https://api.cloudflare.com/client/v4/zones?name={base}", headers={"Authorization": f"Bearer {token}"})
+    data = json.load(urllib.request.urlopen(req, timeout=10))
+    if not data.get("success") or not data.get("result"):
+        print(f"⚠️  No encontré la zona {base} (¿token con permisos DNS?)")
+        raise SystemExit
+    zone = data["result"][0]["id"]
+    # Crear/actualizar registro A para sdns.<dominio>
+    req2 = urllib.request.Request(f"https://api.cloudflare.com/client/v4/zones/{zone}/dns_records",
+        data=json.dumps({"type": "A", "name": ns, "content": ip, "ttl": 120, "proxied": False}).encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, method="POST")
+    data2 = json.load(urllib.request.urlopen(req2, timeout=10))
+    if data2.get("success"):
+        print(f"✅ Registro A creado: {ns} -> {ip}")
+    else:
+        errs = [e.get("message","") for e in data2.get("errors",[])]
+        if any("already exists" in e for e in errs) or any("Duplicate" in e for e in errs):
+            print(f"ℹ️  Registro ya existía (actualizalo si cambió la IP)")
+        else:
+            print(f"⚠️  Error CF: {errs}")
+except Exception as e:
+    print(f"⚠️  No pude crear el registro A: {e}")
+PYEOF
+  else
+    echo ""
+    echo -e "  ${YELLOW}📌 Para que SlowDNS funcione, creá este registro DNS:${NC}"
+    echo -e "  ${CYAN}  Tipo: A"
+    echo -e "  ${CYAN}  Nombre: sdns.${NS_BASE}"
+    echo -e "  ${CYAN}  Valor: $(get_ip)${NC}"
+    echo -e "  ${YELLOW}  (o en Cloudflare: Zona DNS → Agregar registro A con esos datos)${NC}"
+    echo ""
+    echo -e "  ${YELLOW}  💡 Con token CF automático: echo 'TU_TOKEN' > /etc/ctmanager/cloudflare_token${NC}"
+  fi
   # 5) Servicio sldns-server (UDP 5300 -> SSH 22)
   cat > /etc/systemd/system/sldns-server.service <<EOF
 [Unit]
