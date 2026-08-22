@@ -125,7 +125,9 @@ write_config(){
   "quota_gb": 200,
   "quota_dias": 30,
   "sshgo_host": "127.0.0.1",
-  "sshgo_port": 2200
+  "sshgo_port": 2200,
+  "brook_host": "127.0.0.1",
+  "brook_port": 18999
 }
 EOF
     ok "Config creado: $CONFIG_FILE"
@@ -1311,6 +1313,8 @@ EOF
   install_ai_help
   # 6g) SSHGO — servidor SSH con banner dinámico (USER/EXP/DAYS/TRF/LIMIT)
   install_sshgo
+  # 6h) BROOK — proxy wsserver (útil fuera de zero-rating, casi ningún script lo trae)
+  install_brook
   # 7) arrancar todo
   systemctl daemon-reload
   systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -1533,6 +1537,77 @@ EOF
 }
 
 
+# ─── BROOK: proxy TCP/UDP estilo V2Ray (modo wsserver, útil fuera de zero-rating) ───
+install_brook(){
+  need_root
+  local BROOK_BIN="/usr/local/bin/brook"
+  if [[ -x "$BROOK_BIN" ]]; then
+    warn "brook ya existe (se conserva)"
+  else
+    warn "Descargando brook (wsserver)..."
+    local url_ok=0
+    for url in \
+      "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/brook-linux-amd64" \
+      "https://github.com/Agro-bot2026/Dev-proxy/raw/main/brook-linux-amd64"; do
+      if download_file "$url" "$BROOK_BIN" 2>/dev/null && [[ -s "$BROOK_BIN" ]]; then
+        chmod 755 "$BROOK_BIN"
+        url_ok=1
+        break
+      fi
+    done
+    if [[ $url_ok -eq 1 ]]; then
+      ok "brook descargado ($(du -h "$BROOK_BIN" | cut -f1))"
+    else
+      warn "No pude bajar brook (protocolo Brook NO activo)"
+      return 0
+    fi
+  fi
+  # Password aleatoria + servicio systemd (escucha SOLO en 127.0.0.1)
+  local B_PASS
+  B_PASS="$(openssl rand -hex 8 2>/dev/null || echo brookpass123)"
+  mkdir -p /etc/systemd/system
+  cat > /etc/systemd/system/brook.service <<EOF
+[Unit]
+Description=Brook wsserver (proxy TCP/UDP estilo V2Ray) - puerto 18999
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$BROOK_BIN wsserver --listen 127.0.0.1:18999 --password $B_PASS
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable brook >/dev/null 2>&1 || true
+  systemctl restart brook 2>/dev/null || true
+  if systemctl is-active --quiet brook; then
+    ok "Brook ACTIVO en 127.0.0.1:18999"
+  else
+    warn "brook no arrancó — mirá journalctl -u brook"
+  fi
+  # Guardar la password para generar links
+  echo "$B_PASS" > /etc/ctmanager/config/brook_password
+  chmod 600 /etc/ctmanager/config/brook_password 2>/dev/null || true
+  # Config: agregar brook_port
+  if [[ -f "$CONFIG_FILE" ]]; then
+    python3 - "$CONFIG_FILE" << 'PYEOF'
+import json, sys
+cfg_path = sys.argv[1]
+cfg = json.load(open(cfg_path))
+cfg['brook_host'] = '127.0.0.1'
+cfg['brook_port'] = 18999
+json.dump(cfg, open(cfg_path, 'w'), indent=2)
+PYEOF
+    systemctl restart "$SERVICE_NAME" 2>/dev/null || true
+    ok "config.json actualizado con brook_port=18999 + proxy reiniciado"
+  fi
+}
+
+
 # ─── SSHGO: servidor SSH con banner dinámico (USER/EXP/DAYS/TRF/LIMIT) ───
 install_sshgo(){
   need_root
@@ -1645,6 +1720,7 @@ menu(){
     echo " ────────────────────────────────────────────────"
     echo " [18] 🔒 Instalar SSL 443 → proxy (método TLS)"
     echo " [19] 🔄 ACTUALIZAR Ghost Proxy (si hay versión nueva)"
+    echo " [20] 🟦 Instalar Brook (proxy wsserver, opcional)"
     echo " [0] Salir"
     echo
     read -r -p "Opción: " op
@@ -1669,6 +1745,7 @@ menu(){
         ;;
       18) install_tls_443; press_enter ;;
       19) do_update ;;
+      20) install_brook; press_enter ;;
       0) exit 0 ;;
       *) warn "Opción inválida"; press_enter ;;
     esac

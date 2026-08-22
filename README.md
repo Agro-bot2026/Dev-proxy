@@ -2,7 +2,7 @@
 
 Instalador automático con **menú completo para novatos**:
 
-**SSH · Psiphon · V2Ray · OpenVPN · WireGuard · UDP Custom**
+**SSH · Psiphon · V2Ray · OpenVPN · WireGuard · UDP Custom · Brook**
 
 ![Menú del script](menu-ghost-proxy-v3.png)
 
@@ -175,6 +175,7 @@ ghost-manager
 | `ghost-manager` | Menú de usuarios (16 opciones: consumo UUID/Psiphon, eliminar VLESS, editar banner) |
 | `proxy.py` | Proxy multi-protocolo (detección por bytes + sirve /ovpn/ + ruteo SSH→sshgo) |
 | `sshgo-linux-amd64` | Servidor SSH en Go con banner dinámico (USER/EXP/DAYS/TRF/LIMIT) |
+| `brook-linux-amd64` | Brook wsserver (proxy TCP/UDP estilo V2Ray — opcional, útil fuera de zero-rating) |
 | `psiphon-server` | Binario de Psiphon server |
 | `xray` | Binario de Xray (V2Ray) |
 | `xray_uuid.sh` | Gestión de UUIDs de Xray |
@@ -209,6 +210,7 @@ El dominio del VPS se guarda en `/etc/ctmanager/websocket/dominio` (se usa para 
 | OpenVPN | `0x38/0x08/0x28` | ovpn_port |
 | WireGuard | `0x01 0x00 0x00 0x00` | wg_port |
 | V2Ray RAW | `0x00/0x01` | v2ray_port |
+| Brook | `GET /ws` + `Upgrade: websocket` | brook_port (18999) |
 
 El proxy también maneja payloads con `[split]` (2 bloques HTTP) — corta en el último `\r\n\r\n` para que el paquete del túnel llegue limpio al destino.
 
@@ -254,3 +256,16 @@ El instalador instala **sshgo** (servidor SSH en Go, binario estático) que aute
 
 El panel web (`ghost-panel` repo privado) tiene `/checkuser` que responde DDMMYYYY (GET y POST). Si tu versión de HTTP Custom tiene checkuser (URL+puerto), configurá:
 `http://IP:8303/checkuser` · puerto `8303`
+
+
+## 🟦 Brook (wsserver — opcional)
+
+El instalador incluye **Brook** (proxy TCP/UDP estilo V2Ray, modo `wsserver`) — un protocolo que casi ningún script trae.
+
+- **Puerto**: `127.0.0.1:18999` (solo local — lo alcanza el proxy :80)
+- **Detección**: `GET /ws` + `Upgrade: websocket` → brook_port
+- **Password**: aleatoria, guardada en `/etc/ctmanager/config/brook_password`
+- **Link**: `brook://wsserver?password=<pass>&wsserver=ws://IP:80/ws` (para la app oficial de Brook)
+- **Útil**: en países donde no aplica zero-rating, Brook funciona como VPN directa sin payload
+- ⚠️ La app oficial de Brook no tiene campo de payload → **sin zero-rating** (el método de bughost requiere HTTP Custom + payload). Por eso es un protocolo complementario, no reemplaza a los demás.
+- Instalar solo: `ghost-proxy-v14.sh` → opción 20
