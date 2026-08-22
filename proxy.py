@@ -227,21 +227,10 @@ def handle_client(client_socket, cfg):
                 return
             active_conns[src_ip] = actual + 1
 
-        # 7) Si es V2Ray: límite de 1 conexión POR UUID
+        # 7) Si es V2Ray: extraer UUID solo para log (sin límite de conexiones por UUID)
         uuid_hex = None
         if target_port == 8443 and first_packet:
             uuid_hex = extraer_uuid_vless(first_packet)
-            if uuid_hex:
-                with active_lock:
-                    if active_uuid_conns.get(uuid_hex, 0) >= 1:
-                        # Ya hay una conexión activa con este UUID → rechazar
-                        active_conns[src_ip] = max(0, active_conns.get(src_ip, 1) - 1)
-                        if active_conns.get(src_ip, 0) == 0:
-                            active_conns.pop(src_ip, None)
-                        client_socket.close()
-                        print(f"[CTManager WS] V2Ray rechazado: UUID {uuid_hex[:8]} ya tiene conexión activa", flush=True)
-                        return
-                    active_uuid_conns[uuid_hex] = active_uuid_conns.get(uuid_hex, 0) + 1
 
         # 8) Conectar
         dest = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -252,10 +241,6 @@ def handle_client(client_socket, cfg):
                 active_conns[src_ip] = max(0, active_conns.get(src_ip, 1) - 1)
                 if active_conns.get(src_ip, 0) == 0:
                     active_conns.pop(src_ip, None)
-                if uuid_hex:
-                    active_uuid_conns[uuid_hex] = max(0, active_uuid_conns.get(uuid_hex, 1) - 1)
-                    if active_uuid_conns.get(uuid_hex, 0) == 0:
-                        active_uuid_conns.pop(uuid_hex, None)
             client_socket.close()
             return
 
@@ -268,10 +253,6 @@ def handle_client(client_socket, cfg):
                     active_conns[src_ip] = max(0, active_conns.get(src_ip, 1) - 1)
                     if active_conns.get(src_ip, 0) == 0:
                         active_conns.pop(src_ip, None)
-                    if uuid_hex:
-                        active_uuid_conns[uuid_hex] = max(0, active_uuid_conns.get(uuid_hex, 1) - 1)
-                        if active_uuid_conns.get(uuid_hex, 0) == 0:
-                            active_uuid_conns.pop(uuid_hex, None)
             except: pass
 
         nom_proto = 'SSH' if target_port==22 else 'OpenVPN' if target_port==1194 else 'V2Ray' if target_port==8443 else 'Psiphon' if target_port==2223 else 'WireGuard' if target_port==51821 else 'UDP Custom' if target_port==1 else 'SSH'
