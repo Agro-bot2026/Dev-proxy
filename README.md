@@ -300,3 +300,5 @@ Proxy cifrado clásico (inbound de Xray):
 - **Uso**: HTTP Custom → Shadowsocks → server IP:8388
 - ⚠️ **Sin payload** — HTTP Custom no usa bughost en Shadowsocks y el protocolo no tiene firma detectable (cifrado desde byte 0), así que NO aplica zero-rating. Es un protocolo complementario (funciona en cualquier país, como Brook).
 - Instalar solo: `ghost-proxy-v14.sh` → opción 23
+- **Usuarios individuales** (como VLESS): ghost-manager → opción 21 (crear, genera password+link) y 22 (eliminar, corta acceso)
+- **DB**: `/etc/ctmanager/config/ss_users.db` · **Script**: `ss_users.sh` (add/remove/list/reload)

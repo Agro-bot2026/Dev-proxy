@@ -1596,6 +1596,13 @@ PYEOF
   else
     warn "Shadowsocks no escucha — mirá journalctl -u xray"
   fi
+  # Script de gestión de usuarios SS (para ghost-manager crear/eliminar)
+  if download_file "https://raw.githubusercontent.com/Agro-bot2026/Dev-proxy/main/ss_users.sh" "/usr/local/bin/ss_users.sh" && [[ -s /usr/local/bin/ss_users.sh ]]; then
+    chmod 755 /usr/local/bin/ss_users.sh
+    ok "ss_users.sh instalado (gestión de usuarios Shadowsocks)"
+  else
+    warn "No pude bajar ss_users.sh (no vas a poder crear/eliminar usuarios SS)"
+  fi
   # Config del proxy: anotar (informativo)
   if [[ -f "$CONFIG_FILE" ]]; then
     python3 - "$CONFIG_FILE" << 'PYEOF'
