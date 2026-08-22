@@ -283,7 +283,7 @@ def handle_client(client_socket, cfg):
                         active_conns.pop(src_ip, None)
             except: pass
 
-        nom_proto = 'SSH' if target_port==22 else 'OpenVPN' if target_port==1194 else 'V2Ray' if target_port==8443 else 'Psiphon' if target_port==2223 else 'WireGuard' if target_port==51821 else 'Brook' if target_port==18999 else 'SSH'
+        nom_proto = ('SLOWDNS' if target_port==5301 else 'SSHGO' if target_port==2200 else 'SSH' if target_port==22 else 'OpenVPN' if target_port==1194 else 'V2Ray' if target_port==8443 else 'Psiphon' if target_port==2223 else 'WireGuard' if target_port==51821 else 'Brook' if target_port==18999 else 'SSH')
         ctx_fwd1 = {'protocolo': nom_proto.lower(), 'src_ip': src_ip}
         ctx_fwd2 = {'protocolo': nom_proto.lower(), 'src_ip': src_ip}
         t1 = threading.Thread(target=forward, args=(client_socket, dest, ctx_fwd1), daemon=True)
