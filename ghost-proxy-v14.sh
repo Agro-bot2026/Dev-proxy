@@ -1588,9 +1588,11 @@ EOF
     mkdir -p /etc/ctmanager/config
     cat > /etc/ctmanager/config/sshgo_banner.txt << 'BEOF'
 
-════════════════════════════════════════════
-   E P R O . H C
-════════════════════════════════════════════
+<font color='orange'>
+ █▀▀▀ █▀▀█ █▀▀█ █▀▀▀█ ░ █░▒█ █▀▀█
+ █▀▀▀ █▄▄█ █▄▄▀ █░░▒█ ░ █▀▀█ █░░░
+ █▄▄▄ █░░░ █░▒█ █▄▄▄█ █ █░▒█ █▄▄█
+</font>
 <font color='green'>name: USER</font>
 <font color='blue'>expire: EXP</font>
 <font color='teal'>days: DAYS</font>
