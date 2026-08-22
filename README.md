@@ -1,6 +1,6 @@
 # 🦇 Ghost Proxy v14 — Multi-Protocolo
 
-Instalador automático tipo ADMRufu con **menú completo para novatos**:
+Instalador automático con **menú completo para novatos**:
 
 **SSH · Psiphon · V2Ray · OpenVPN · WireGuard · UDP Custom**
 
@@ -229,7 +229,7 @@ El instalador instala **sshgo** (servidor SSH en Go, binario estático) que aute
 
 - **Puerto**: `127.0.0.1:2200` (solo local — el proxy :80 lo alcanza, NO se abre al firewall)
 - **Plantilla editable**: `/etc/ctmanager/config/sshgo_banner.txt`
-  - Placeholders: `USER EXP DAYS TRF LIMIT` (estilo ADMRufu) + `{name} {expire} {days} {traffic} {limit} {status}`
+  - Placeholders: `USER EXP DAYS TRF LIMIT` + `{name} {expire} {days} {traffic} {limit} {status}`
   - Soporta HTML: `<font color='green'>`, `<span style="background-color:...">`, `<b>`, `<br/>`
   - ⚠️ HTTP Custom NO renderiza colores ANSI ni caracteres de caja (╔═╗█) — usar HTML o ASCII puro
 - **Editar banner**: `ghost-manager` → opción 19 (marca + idioma ES/EN/PT + color, o nano)
