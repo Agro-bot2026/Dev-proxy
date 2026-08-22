@@ -265,6 +265,8 @@ WorkingDirectory=${INSTALL_DIR}
 ExecStart=/usr/bin/python3 ${INSTALL_DIR}/proxy.py
 Restart=on-failure
 RestartSec=3
+LimitNOFILE=65535
+LimitNPROC=65535
 
 [Install]
 WantedBy=multi-user.target

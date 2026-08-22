@@ -133,7 +133,10 @@ def handle_client(client_socket, cfg):
     }
     payload = payloads.get(str(cfg.get("payload", "200")), payloads["200"])
     max_conn = int(cfg.get("max_connections_per_user", 1))
-    src_ip = client_socket.getpeername()[0]
+    try:
+        src_ip = client_socket.getpeername()[0]
+    except Exception:
+        src_ip = "0.0.0.0"
     try:
         # 0b) CUOTA DE DATOS: si la IP superó el límite → rechazar con 403
         if _quota_excedida(src_ip, cfg):
