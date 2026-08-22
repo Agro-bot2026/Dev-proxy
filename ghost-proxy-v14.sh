@@ -572,7 +572,10 @@ open_all_ports(){
   echo -e "${CYAN}  🔓 Abriendo puertos en el firewall...${NC}"
   # Puertos del stack: 80 (proxy), 22 (SSH), 2223 (Psiphon), 8443 (Xray),
   # 1194 (OpenVPN), 51820 (WG), 7300 (BadVPN UDP), 20128 (9Router AI)
-  local puertos_tcp="80 22 2223 8443 1194 51820 20128"
+  # Stack: 80 (proxy), 22 (SSH), 2223 (Psiphon), 8443 (Xray), 1194 (OpenVPN),
+  # 51820 (WG), 20128 (9Router AI), 444 (Dropbear), 1080/3128 (Squid)
+  # NOTA: 2200 (sshgo) y 18999 (Brook) NO se abren — son solo 127.0.0.1 (los alcanza el :80)
+  local puertos_tcp="80 22 2223 8443 1194 51820 20128 444 1080 3128"
   local puertos_udp="80 2223 8443 1194 51820 7300"
 
   if has_cmd ufw; then
